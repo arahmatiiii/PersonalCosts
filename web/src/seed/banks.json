@@ -1,0 +1,32 @@
+[
+  {
+    "name": "بلوبانک",
+    "matchPackages": ["VERIFY_ME_BLU_PACKAGE_NAME"],
+    "matchSenderIds": ["VERIFY_ME_BLU_SMS_SENDER"],
+    "regexAmount": "([\\d,]+)\\s*ريال",
+    "incomeKeywords": ["واریز", "افزایش موجودی"],
+    "expenseKeywords": ["خرید", "برداشت", "کسر"],
+    "enabled": true,
+    "isDefault": true
+  },
+  {
+    "name": "بانک گردشگری",
+    "matchPackages": ["VERIFY_ME_GARDESHGARI_PACKAGE_NAME"],
+    "matchSenderIds": ["VERIFY_ME_GARDESHGARI_SMS_SENDER"],
+    "regexAmount": "([\\d,]+)\\s*ريال",
+    "incomeKeywords": ["واریز"],
+    "expenseKeywords": ["خرید", "برداشت"],
+    "enabled": true,
+    "isDefault": true
+  },
+  {
+    "name": "بانک ملی",
+    "matchPackages": ["VERIFY_ME_MELLI_PACKAGE_NAME"],
+    "matchSenderIds": ["VERIFY_ME_MELLI_SMS_SENDER"],
+    "regexAmount": "([\\d,]+)\\s*ريال",
+    "incomeKeywords": ["واریز"],
+    "expenseKeywords": ["خرید", "برداشت"],
+    "enabled": true,
+    "isDefault": true
+  }
+]
