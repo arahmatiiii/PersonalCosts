@@ -1,54 +1,99 @@
-/**
- * Turns a bank SMS/notification into an amount + type using that bank's rule.
- * Used both for real captures (lib/ingest.ts) and the "test with a sample" box in Settings.
- */
-import type { Bank, TxType } from "../types";
+import type { TxType } from "../types";
 
-/** Persian/Arabic digits → ASCII, Arabic yeh/kaf → Persian, Persian/Arabic thousands separators → ",". */
+/**
+ * Generic parser for Iranian bank SMS. Banks are identified only by sender number, so amount and
+ * direction are extracted with rules that work across banks (Melli, Mellat, Saderat, Blu, …):
+ *
+ *   amount — a number next to «مبلغ», or followed by «ریال/تومان», or carrying a +/- sign;
+ *            balance figures («مانده/موجودی») and dates/times/card numbers are ignored.
+ *   type   — the sign wins (+ income, − expense), then keywords; otherwise flagged as uncertain.
+ *
+ * Amounts are returned in Rial (Toman amounts are ×10).
+ */
+
+/** Persian/Arabic digits → ASCII, Persian separators → ",", Arabic yeh/kaf → Persian, ZWNJ → space. */
 export function normalizeText(s: string): string {
   return s
     .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
     .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
     .replace(/[٬،]/g, ",")
-    .replace(/ي/g, "ی")
-    .replace(/ى/g, "ی")
+    .replace(/[يى]/g, "ی")
     .replace(/ك/g, "ک")
-    .replace(/‌/g, " "); // ZWNJ → space so "افزایش‌موجودی" matches "افزایش موجودی"
+    .replace(/‌/g, " ")
+    .replace(/[‎‏‪-‮]/g, ""); // bidi marks some banks insert around numbers
 }
 
 export interface ParseResult {
-  amount: number;
+  amount: number; // Rial
   type: TxType;
   typeUncertain: boolean;
 }
 
-export type ParseOutcome = { ok: true; result: ParseResult } | { ok: false; error: string };
+const INCOME = ["واریز", "افزایش", "دریافت", "سود", "برگشت", "بستانکار", "انتقال به حساب شما"];
+const EXPENSE = ["برداشت", "خرید", "کسر", "پرداخت", "کارمزد", "بدهکار", "انتقال از", "قسط", "شارژ"];
+const BALANCE = /(مانده|موجودی|مانده حساب|قابل برداشت)\s*[:：]?\s*[+-]?\s*[\d,]+/g;
 
-export function parse(bank: Pick<Bank, "regexAmount" | "incomeKeywords" | "expenseKeywords">, text: string): ParseOutcome {
-  let re: RegExp;
-  try {
-    re = new RegExp(normalizeText(bank.regexAmount));
-  } catch (e) {
-    return { ok: false, error: `regex نامعتبر است: ${(e as Error).message}` };
-  }
+interface Candidate {
+  value: number;
+  score: number;
+  sign: "+" | "-" | null;
+  toman: boolean;
+}
+
+export function parse(text: string): ParseResult | null {
   const norm = normalizeText(text);
-  const m = re.exec(norm);
-  if (!m) return { ok: false, error: "regex مبلغ با متن مطابقت نداشت" };
-  if (m[1] === undefined) return { ok: false, error: "regex باید دقیقاً یک گروه capture برای مبلغ داشته باشد" };
-  const digits = m[1].replace(/[^\d]/g, "");
-  if (!digits) return { ok: false, error: "گروه capture عددی نداشت" };
-  const amount = Number(digits);
+  if (/رمز|کد تایید|کد فعال/.test(norm) && !/مبلغ/.test(norm)) return null; // OTP / verification SMS
+  const cleaned = norm.replace(BALANCE, " ");
 
-  const has = (kws: string[]) => kws.some((k) => k.trim() && norm.includes(normalizeText(k.trim())));
-  if (has(bank.expenseKeywords)) return { ok: true, result: { amount, type: "expense", typeUncertain: false } };
-  if (has(bank.incomeKeywords)) return { ok: true, result: { amount, type: "income", typeUncertain: false } };
-  return { ok: true, result: { amount, type: "expense", typeUncertain: true } };
+  const candidates: Candidate[] = [];
+  const re = /([+-])?\s*(\d{1,3}(?:,\d{3})+|\d+)\s*([+-])?/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cleaned))) {
+    const raw = m[2];
+    const digits = raw.replace(/,/g, "");
+    const start = m.index + m[0].indexOf(raw);
+    const end = start + raw.length;
+    const before = cleaned.slice(Math.max(0, start - 14), start);
+    const after = cleaned.slice(end, end + 10);
+
+    // Not amounts: dates (1405/07/01), times (12:30), masked/long card & account numbers.
+    if (/\d\s*[/:*-]$/.test(before) || /^[/:*]\s*\d/.test(after) || /^\*/.test(after)) continue;
+    if (!raw.includes(",") && digits.length > 12) continue;
+    const value = Number(digits);
+    if (!value) continue;
+
+    let score = 0;
+    if (raw.includes(",")) score += 2;
+    if (/مبلغ\s*[:：]?\s*$/.test(before)) score += 5;
+    const toman = /^\s*تومان/.test(after);
+    if (/^\s*(ریال|تومان)/.test(after)) score += 4;
+    // A sign glued to another number is a separator (e.g. "0701-12:30"), not a direction.
+    const lead = m[1] && !/\d\s*$/.test(cleaned.slice(0, m.index)) ? m[1] : null;
+    const trail = m[3] && !/^\s*\d/.test(cleaned.slice(m.index + m[0].length)) ? m[3] : null;
+    const sign = (lead ?? trail) as Candidate["sign"];
+    if (sign) score += 3;
+    if (score < 2) continue; // a bare number with no comma/unit/sign/«مبلغ» (codes, ids, OTPs)
+    if (!raw.includes(",") && digits.length < 4 && score < 4) continue; // stray small numbers
+    candidates.push({ value, score, sign, toman });
+  }
+  if (candidates.length === 0) return null;
+
+  const best = candidates.reduce((a, b) => (b.score > a.score ? b : a));
+  const amount = best.toman ? best.value * 10 : best.value;
+
+  if (best.sign === "+") return { amount, type: "income", typeUncertain: false };
+  if (best.sign === "-") return { amount, type: "expense", typeUncertain: false };
+  const has = (kws: string[]) => kws.some((k) => cleaned.includes(k));
+  const inc = has(INCOME);
+  const exp = has(EXPENSE);
+  if (exp && !inc) return { amount, type: "expense", typeUncertain: false };
+  if (inc && !exp) return { amount, type: "income", typeUncertain: false };
+  return { amount, type: "expense", typeUncertain: true };
 }
 
 /**
  * Normalizes SMS sender ids so "+98 999 1234", "00989991234", "09991234" and "989991234"
- * compare equal, and alphanumeric senders compare case-insensitively.
- * Mirrored in android/.../CaptureStore.java (native pre-filter) — keep in sync.
+ * compare equal. Mirrored in android/.../CaptureStore.java — keep in sync.
  */
 export function normalizeSender(raw: string): string {
   let s = normalizeText(raw).toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
@@ -58,10 +103,4 @@ export function normalizeSender(raw: string): string {
     else if (s.startsWith("0")) s = s.slice(1);
   }
   return s;
-}
-
-export function bankMatches(bank: Bank, source: "sms" | "notification", origin: string): boolean {
-  if (source === "notification") return bank.matchPackages.some((p) => p.trim().toLowerCase() === origin.toLowerCase());
-  const o = normalizeSender(origin);
-  return bank.matchSenderIds.some((s) => s.trim() && normalizeSender(s) === o);
 }

@@ -1,32 +1,31 @@
+import { Inbox, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { dayKey, formatDay, formatToman, startOfDay } from "../lib/format";
-import { isNative } from "../native/personalCost";
+import { dayKey, faNum, formatDay, rialToToman, startOfDay } from "../lib/format";
 import { useStore } from "../store/useStore";
 import type { Transaction } from "../types";
-import TransactionForm from "./TransactionForm";
+import AddSheet from "./AddSheet";
 import TransactionRow from "./TransactionRow";
+import TransactionSheet from "./TransactionSheet";
 
 const PAGE_DAYS = 7;
 
 export default function HomePage() {
   const { transactions, banks, tags } = useStore();
-  const [daysBack, setDaysBack] = useState(0); // 0 = today only
+  const [daysBack, setDaysBack] = useState(PAGE_DAYS - 1);
   const [adding, setAdding] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
 
-  const sortedTags = useMemo(() => [...tags].sort((a, b) => a.order - b.order), [tags]);
   const bankById = useMemo(() => new Map(banks.map((b) => [b.id, b])), [banks]);
-  const tagColor = (l: string | null) => (l && tags.find((t) => t.label === l)?.color) || "#94a3b8";
-
+  const sorted = useMemo(() => [...transactions].sort((a, b) => b.timestamp - a.timestamp), [transactions]);
   const from = useMemo(() => {
     const f = startOfDay(new Date());
     f.setDate(f.getDate() - daysBack);
     return f.getTime();
   }, [daysBack]);
 
-  const sorted = useMemo(() => [...transactions].sort((a, b) => b.timestamp - a.timestamp), [transactions]);
   const untagged = sorted.filter((t) => !t.tagged);
-  // Untagged ones older than the visible window stay pinned on top so nothing escapes review.
   const olderUntagged = untagged.filter((t) => t.timestamp < from);
+  const hasOlder = sorted.some((t) => t.timestamp < from && t.tagged);
 
   const groups = useMemo(() => {
     const m = new Map<string, { date: Date; items: Transaction[] }>();
@@ -41,51 +40,55 @@ export default function HomePage() {
   }, [sorted, from]);
 
   const todayStart = startOfDay(new Date()).getTime();
-  const todayExpense = sorted.filter((t) => t.timestamp >= todayStart && t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const today = sorted.filter((t) => t.timestamp >= todayStart);
+  const todayExpense = today.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const open = openId ? transactions.find((t) => t.id === openId) : undefined;
 
-  const row = (t: Transaction) => <TransactionRow key={t.id} tx={t} bank={bankById.get(t.bankId)} tags={sortedTags} tagColor={tagColor} />;
+  const group = (title: string, items: Transaction[]) => (
+    <section key={title}>
+      <div className="day-title">{title}</div>
+      <div className="card tx-group">
+        {items.map((t) => (
+          <TransactionRow key={t.id} tx={t} bank={bankById.get(t.bankId)} tags={tags} onOpen={() => setOpenId(t.id)} />
+        ))}
+      </div>
+    </section>
+  );
 
   return (
-    <div className="page">
-      <header className="summary card">
-        <div>
-          <div className="muted small">هزینه امروز</div>
-          <div className="big">{formatToman(todayExpense)}</div>
+    <>
+      <div className="hero">
+        <span className="label">هزینه امروز</span>
+        <span className="value num">
+          {faNum(rialToToman(todayExpense))}
+          <small>تومان</small>
+        </span>
+        <div className="meta">
+          <span className="pill">{faNum(today.length)} تراکنش</span>
+          {untagged.length > 0 && <span className="pill">{faNum(untagged.length)} بدون تگ</span>}
         </div>
-        <div className={untagged.length ? "pill pill-warn" : "pill"}>
-          {untagged.length ? `${untagged.length.toLocaleString("fa-IR")} تگ‌نخورده` : "همه تگ خورده ✓"}
-        </div>
-      </header>
+      </div>
 
-      {!isNative && transactions.length === 0 && (
-        <p className="muted small center">
-          این نسخه وب است و فقط ثبت دستی دارد. دریافت خودکار پیامک/اعلان بانک در نسخه اندروید (APK) انجام می‌شود.
-        </p>
+      {olderUntagged.length > 0 && group("بدون تگ", olderUntagged)}
+      {groups.map((g) => group(formatDay(g.date), g.items))}
+
+      {groups.length === 0 && olderUntagged.length === 0 && (
+        <div className="empty">
+          <Inbox size={36} strokeWidth={1.5} />
+          <span>هنوز تراکنشی نیست</span>
+        </div>
+      )}
+      {hasOlder && (
+        <button type="button" className="link-btn" onClick={() => setDaysBack((d) => d + PAGE_DAYS)}>
+          روزهای قبل
+        </button>
       )}
 
-      {olderUntagged.length > 0 && (
-        <section>
-          <h2 className="day">تگ‌نخورده‌های قبلی</h2>
-          <ul className="tx-list">{olderUntagged.map(row)}</ul>
-        </section>
-      )}
-
-      {groups.length === 0 && <p className="muted center">امروز تراکنشی ثبت نشده.</p>}
-      {groups.map((g) => (
-        <section key={dayKey(g.date)}>
-          <h2 className="day">{formatDay(g.date)}</h2>
-          <ul className="tx-list">{g.items.map(row)}</ul>
-        </section>
-      ))}
-
-      <button type="button" className="more" onClick={() => setDaysBack((d) => (d === 0 ? PAGE_DAYS : d + PAGE_DAYS))}>
-        نمایش روزهای قبل
+      <button type="button" className="fab" onClick={() => setAdding(true)} aria-label="افزودن">
+        <Plus size={26} />
       </button>
-
-      <button type="button" className="fab" onClick={() => setAdding(true)} aria-label="افزودن تراکنش">
-        +
-      </button>
-      {adding && <TransactionForm banks={banks} tags={sortedTags} onClose={() => setAdding(false)} />}
-    </div>
+      {adding && <AddSheet onClose={() => setAdding(false)} />}
+      {open && <TransactionSheet key={open.id} tx={open} onClose={() => setOpenId(null)} />}
+    </>
   );
 }

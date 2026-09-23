@@ -48,7 +48,7 @@ public class PersonalCostPlugin extends Plugin {
         if (instance == this) instance = null;
     }
 
-    /** Called by CaptureStore when something new is queued, so an open app ingests it immediately. */
+    /** Called by CaptureStore when an SMS is queued, so an open app ingests it immediately. */
     static void notifyCapture() {
         PersonalCostPlugin p = instance;
         if (p != null) p.notifyListeners("capture", new JSObject());
@@ -59,10 +59,8 @@ public class PersonalCostPlugin extends Plugin {
     }
 
     @PluginMethod
-    public void setFilters(PluginCall call) {
-        JSONArray packages = call.getArray("packages", new JSArray());
-        JSONArray senders = call.getArray("senders", new JSArray());
-        CaptureStore.setFilters(ctx(), packages, senders, call.getBoolean("captureAll", false));
+    public void setSenders(PluginCall call) {
+        CaptureStore.setSenders(ctx(), call.getArray("senders", new JSArray()));
         call.resolve();
     }
 
@@ -90,52 +88,35 @@ public class PersonalCostPlugin extends Plugin {
 
     @PluginMethod
     public void getStatus(PluginCall call) {
-        Context c = ctx();
-        JSObject ret = new JSObject();
-        ret.put("notificationListener", NotificationManagerCompat.getEnabledListenerPackages(c).contains(c.getPackageName()));
-        ret.put("sms", granted(Manifest.permission.RECEIVE_SMS) && granted(Manifest.permission.READ_SMS));
-        ret.put("postNotifications", Build.VERSION.SDK_INT >= 33
-                ? granted(Manifest.permission.POST_NOTIFICATIONS)
-                : NotificationManagerCompat.from(c).areNotificationsEnabled());
-        PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
-        ret.put("batteryOptimizationIgnored", pm.isIgnoringBatteryOptimizations(c.getPackageName()));
-        ret.put("pendingCaptures", CaptureStore.queue(c).length());
-        call.resolve(ret);
+        call.resolve(status());
     }
 
+    /**
+     * One button, one flow: ask for SMS + notification permissions together, then (if needed) open
+     * the battery-optimization exemption dialog so Android doesn't kill SMS delivery to the app.
+     */
     @PluginMethod
-    public void openNotificationListenerSettings(PluginCall call) {
-        Intent i = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        ctx().startActivity(i);
-        call.resolve();
-    }
-
-    @PluginMethod
-    public void requestSmsPermission(PluginCall call) {
-        requestPermissionForAlias("sms", call, "permissionDone");
-    }
-
-    @PluginMethod
-    public void requestNotificationPermission(PluginCall call) {
-        if (Build.VERSION.SDK_INT < 33) {
-            call.resolve();
-            return;
+    public void requestAll(PluginCall call) {
+        boolean needPerms = !granted(Manifest.permission.RECEIVE_SMS) || !granted(Manifest.permission.READ_SMS)
+                || (Build.VERSION.SDK_INT >= 33 && !granted(Manifest.permission.POST_NOTIFICATIONS));
+        if (needPerms) {
+            String[] aliases = Build.VERSION.SDK_INT >= 33 ? new String[]{"sms", "notifications"} : new String[]{"sms"};
+            requestPermissionForAliases(aliases, call, "afterPermissions");
+        } else {
+            afterPermissions(call);
         }
-        requestPermissionForAlias("notifications", call, "permissionDone");
     }
 
+    @SuppressLint("BatteryLife") // sideloaded personal app; SMS capture must not be killed
     @PermissionCallback
-    private void permissionDone(PluginCall call) {
-        call.resolve();
-    }
-
-    @SuppressLint("BatteryLife") // sideloaded personal app; the listener must not be killed
-    @PluginMethod
-    public void requestIgnoreBatteryOptimization(PluginCall call) {
-        Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx().getPackageName()))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        ctx().startActivity(i);
-        call.resolve();
+    private void afterPermissions(PluginCall call) {
+        PowerManager pm = (PowerManager) ctx().getSystemService(Context.POWER_SERVICE);
+        if (!pm.isIgnoringBatteryOptimizations(ctx().getPackageName())) {
+            Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx().getPackageName()))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx().startActivity(i);
+        }
+        call.resolve(status());
     }
 
     @PluginMethod
@@ -152,6 +133,18 @@ public class PersonalCostPlugin extends Plugin {
     public void setUntaggedCount(PluginCall call) {
         CaptureStore.setUntaggedCount(ctx(), call.getInt("count", 0));
         call.resolve();
+    }
+
+    private JSObject status() {
+        Context c = ctx();
+        JSObject ret = new JSObject();
+        ret.put("sms", granted(Manifest.permission.RECEIVE_SMS) && granted(Manifest.permission.READ_SMS));
+        ret.put("postNotifications", Build.VERSION.SDK_INT >= 33
+                ? granted(Manifest.permission.POST_NOTIFICATIONS)
+                : NotificationManagerCompat.from(c).areNotificationsEnabled());
+        PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+        ret.put("batteryOptimizationIgnored", pm.isIgnoringBatteryOptimizations(c.getPackageName()));
+        return ret;
     }
 
     private boolean granted(String permission) {

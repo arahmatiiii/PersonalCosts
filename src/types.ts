@@ -1,5 +1,5 @@
 export type TxType = "expense" | "income";
-export type TxSource = "sms" | "notification" | "manual";
+export type TxSource = "sms" | "manual";
 
 /**
  * Amounts are ALWAYS stored in Rial (what Iranian banks quote).
@@ -16,41 +16,28 @@ export interface Transaction {
   tag: string | null;
   note: string | null;
   tagged: boolean;
-  /** Parser found no income/expense keyword and defaulted to "expense" — needs review. */
+  /** Parser couldn't tell income from expense and defaulted to "expense" — needs review. */
   typeUncertain: boolean;
   createdAt: number;
 }
 
+/** A bank is just a name and the SMS sender number its messages come from. */
 export interface Bank {
   id: string;
   name: string;
-  matchPackages: string[];
-  matchSenderIds: string[];
-  regexAmount: string;
-  incomeKeywords: string[];
-  expenseKeywords: string[];
-  enabled: boolean;
-  isDefault: boolean;
+  sender: string;
 }
 
 export interface Tag {
   id: string;
   label: string;
   color: string;
-  order: number;
 }
 
 export interface UserSettings {
   reminderHour: number;
   reminderMinute: number;
   reminderEnabled: boolean;
-}
-
-export interface DebugEntry {
-  t: number;
-  status: string;
-  origin: string;
-  text: string;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -60,3 +47,5 @@ export const DEFAULT_SETTINGS: UserSettings = {
 };
 
 export const CASH_BANK_ID = "cash";
+
+export const TAG_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ec4899", "#3b82f6", "#8b5cf6", "#ef4444", "#14b8a6", "#f97316", "#64748b"];

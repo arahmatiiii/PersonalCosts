@@ -28,7 +28,7 @@ public class ReminderReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (CaptureStore.reminderEnabled(context)) {
-            int count = CaptureStore.untaggedCount(context) + CaptureStore.pendingMatched(context);
+            int count = CaptureStore.untaggedCount(context) + CaptureStore.pending(context);
             if (count > 0) show(context, count);
         }
         schedule(context); // tomorrow

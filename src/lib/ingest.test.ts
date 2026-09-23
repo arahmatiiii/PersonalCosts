@@ -1,70 +1,46 @@
 import { describe, expect, it } from "vitest";
-import type { Bank, Transaction } from "../types";
+import type { Bank } from "../types";
 import { ingestCaptures, type Capture } from "./ingest";
-import { normalizeSender } from "./parser";
+import { migrate } from "../store/useStore";
 
-const bank: Bank = {
-  id: "blu",
-  name: "بلوبانک",
-  matchPackages: ["com.example.blu"],
-  matchSenderIds: ["+989991234567"],
-  regexAmount: "([\\d,]+)\\s*ريال",
-  incomeKeywords: ["واریز"],
-  expenseKeywords: ["خرید", "برداشت"],
-  enabled: true,
-  isDefault: true,
-};
-
-const cap = (over: Partial<Capture>): Capture => ({
-  id: Math.random().toString(),
-  source: "sms",
-  origin: "09991234567",
-  text: "خرید 120,000 ريال",
-  ts: 1_000_000,
-  ...over,
-});
+const bank: Bank = { id: "melli", name: "ملی", sender: "+989991234567" };
+const cap = (over: Partial<Capture>): Capture => ({ id: "1", sender: "09991234567", text: "خرید 120,000 ريال", ts: 1_000_000, ...over });
 
 describe("ingestCaptures", () => {
-  it("parses a matching SMS into an untagged transaction", () => {
-    const { added, log } = ingestCaptures([cap({})], [bank], []);
-    expect(added).toHaveLength(1);
-    expect(added[0]).toMatchObject({ amount: 120000, type: "expense", bankId: "blu", source: "sms", tagged: false });
-    expect(log[0].status).toMatch(/^SAVED/);
+  it("turns an SMS from a known sender into an untagged transaction", () => {
+    const [tx] = ingestCaptures([cap({})], [bank], []);
+    expect(tx).toMatchObject({ amount: 120000, type: "expense", bankId: "melli", source: "sms", tagged: false });
   });
 
-  it("dedups an SMS + notification pair for the same transaction", () => {
-    const { added, log } = ingestCaptures(
-      [cap({}), cap({ source: "notification", origin: "com.example.blu", text: "بلو: خرید ۱۲۰٬۰۰۰ ریال", ts: 1_030_000 })],
-      [bank],
-      [],
-    );
-    expect(added).toHaveLength(1);
-    expect(log[1].status).toMatch(/^DUPLICATE/);
+  it("drops unknown senders and messages without an amount", () => {
+    expect(ingestCaptures([cap({ sender: "+98912000" })], [bank], [])).toHaveLength(0);
+    expect(ingestCaptures([cap({ text: "رمز پویا: 55123" })], [bank], [])).toHaveLength(0);
   });
 
-  it("keeps two identical purchases that are further apart than the window", () => {
-    const { added } = ingestCaptures([cap({ ts: 0 }), cap({ ts: 10 * 60_000 })], [bank], []);
-    expect(added).toHaveLength(2);
-  });
-
-  it("dedups against transactions already stored", () => {
-    const existing = ingestCaptures([cap({})], [bank], []).added as Transaction[];
-    expect(ingestCaptures([cap({ ts: 1_010_000 })], [bank], existing).added).toHaveLength(0);
-  });
-
-  it("logs unparsed bank messages and ignores disabled banks / unknown origins", () => {
-    expect(ingestCaptures([cap({ text: "رمز یکبار مصرف: 1234" })], [bank], []).log[0].status).toMatch(/^UNPARSED/);
-    expect(ingestCaptures([cap({})], [{ ...bank, enabled: false }], []).added).toHaveLength(0);
-    expect(ingestCaptures([cap({ origin: "+98912000" })], [bank], []).log[0].status).toBe("SMS (no bank)");
+  it("dedups the same SMS queued twice but keeps separate purchases", () => {
+    expect(ingestCaptures([cap({}), cap({ id: "2", ts: 1_010_000 })], [bank], [])).toHaveLength(1);
+    expect(ingestCaptures([cap({}), cap({ id: "2", ts: 1_000_000 + 10 * 60_000 })], [bank], [])).toHaveLength(2);
+    const existing = ingestCaptures([cap({})], [bank], []);
+    expect(ingestCaptures([cap({ ts: 1_020_000 })], [bank], existing)).toHaveLength(0);
   });
 });
 
-describe("normalizeSender", () => {
-  it("treats Iranian number formats as equal", () => {
-    const n = normalizeSender("+989991234567");
-    expect(normalizeSender("00989991234567")).toBe(n);
-    expect(normalizeSender("09991234567")).toBe(n);
-    expect(normalizeSender("+98 999 123 4567")).toBe(n);
-    expect(normalizeSender("BluBank")).toBe("blubank");
+describe("migrate v1 → v2", () => {
+  it("keeps real senders, drops placeholders, replaces untouched preset tags", () => {
+    const out = migrate(
+      {
+        banks: [
+          { id: "a", name: "ملی", matchSenderIds: ["VERIFY_ME_X"] },
+          { id: "b", name: "بلو", matchSenderIds: ["+98999"] },
+        ],
+        tags: ["خوراک", "رفت‌وآمد", "خرید خانه", "قبوض", "تفریح", "سلامت", "حقوق", "سایر"].map((label, i) => ({ id: String(i), label, color: "#000", order: i })),
+        transactions: [],
+        debugLog: [],
+      },
+      1,
+    ) as { banks: Bank[]; tags: { label: string }[]; debugLog?: unknown };
+    expect(out.banks).toEqual([{ id: "b", name: "بلو", sender: "+98999" }]);
+    expect(out.tags.map((t) => t.label)).toEqual(["اسنپ", "شارژ"]);
+    expect(out.debugLog).toBeUndefined();
   });
 });

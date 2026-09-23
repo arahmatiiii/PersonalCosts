@@ -9,7 +9,7 @@ import android.telephony.SmsMessage;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Queues SMS from bank senders (see CaptureStore filters). */
+/** Queues SMS from the bank sender numbers configured in the app. */
 public class SmsReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -27,12 +27,10 @@ public class SmsReceiver extends BroadcastReceiver {
             if (m.getMessageBody() != null) b.append(m.getMessageBody());
         }
 
-        boolean captureAll = CaptureStore.captureAll(context);
         long now = System.currentTimeMillis();
         for (Map.Entry<String, StringBuilder> e : bySender.entrySet()) {
-            boolean matched = CaptureStore.matchesSender(context, e.getKey());
-            if (matched || captureAll) {
-                CaptureStore.enqueue(context, "sms", e.getKey(), e.getValue().toString(), now, matched);
+            if (CaptureStore.matchesSender(context, e.getKey())) {
+                CaptureStore.enqueue(context, e.getKey(), e.getValue().toString(), now);
             }
         }
     }

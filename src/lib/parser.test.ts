@@ -1,34 +1,56 @@
 import { describe, expect, it } from "vitest";
-import { parse } from "./parser";
-
-const bank = {
-  regexAmount: "([\\d,]+)\\s*ريال",
-  incomeKeywords: ["واریز", "افزایش موجودی"],
-  expenseKeywords: ["خرید", "برداشت", "کسر"],
-};
+import { normalizeSender, parse } from "./parser";
 
 describe("parse", () => {
-  it("parses an expense with ASCII digits", () => {
-    const r = parse(bank, "خرید از فروشگاه مبلغ 1,250,000 ريال");
-    expect(r).toEqual({ ok: true, result: { amount: 1250000, type: "expense", typeUncertain: false } });
+  it("Melli-style: signed amount after label, balance ignored", () => {
+    expect(parse("بانک ملی\nبرداشت:1,250,000-\nمانده:8,300,000\n0701-12:30")).toEqual({
+      amount: 1250000,
+      type: "expense",
+      typeUncertain: false,
+    });
   });
 
-  it("normalizes Persian digits, Persian separators and Persian yeh in ریال", () => {
-    const r = parse(bank, "واریز ۲٬۵۰۰٬۰۰۰ ریال به حساب شما");
-    expect(r).toEqual({ ok: true, result: { amount: 2500000, type: "income", typeUncertain: false } });
+  it("Mellat-style income with + sign and Persian digits", () => {
+    expect(parse("حساب ۱۲۳۴*\nواریز\n+۲٬۵۰۰٬۰۰۰\nمانده: ۱۰٬۰۰۰٬۰۰۰\n۱۴۰۵/۰۷/۰۱")).toEqual({
+      amount: 2500000,
+      type: "income",
+      typeUncertain: false,
+    });
   });
 
-  it("flags unclear type instead of silently guessing", () => {
-    const r = parse(bank, "تراکنش 10,000 ريال");
-    expect(r).toEqual({ ok: true, result: { amount: 10000, type: "expense", typeUncertain: true } });
+  it("amount next to مبلغ with ریال, keyword decides type", () => {
+    expect(parse("خرید از فروشگاه مبلغ: 350,000 ريال موجودی 1,000,000 ريال")).toEqual({
+      amount: 350000,
+      type: "expense",
+      typeUncertain: false,
+    });
   });
 
-  it("returns an error when the regex doesn't match", () => {
-    expect(parse(bank, "سلام").ok).toBe(false);
+  it("converts Toman to Rial", () => {
+    expect(parse("واریز 120,000 تومان به حساب شما")).toMatchObject({ amount: 1200000, type: "income" });
   });
 
-  it("matches keywords across ZWNJ", () => {
-    const r = parse(bank, "افزایش‌موجودی 5,000 ريال");
-    expect(r.ok && r.result.type).toBe("income");
+  it("ignores dates, times and card numbers", () => {
+    expect(parse("کارت 6037991234567890 تاریخ 1405/07/01 ساعت 12:45 خرید 90,000 ریال")).toMatchObject({ amount: 90000 });
+  });
+
+  it("flags unclear type instead of guessing silently", () => {
+    expect(parse("تراکنش 10,000 ريال")).toEqual({ amount: 10000, type: "expense", typeUncertain: true });
+  });
+
+  it("returns null when there is no amount (e.g. OTP)", () => {
+    expect(parse("رمز پویا: 123456")).toBeNull();
+    expect(parse("سلام")).toBeNull();
+  });
+});
+
+describe("normalizeSender", () => {
+  it("treats Iranian number formats as equal", () => {
+    const n = normalizeSender("+989991234567");
+    expect(normalizeSender("00989991234567")).toBe(n);
+    expect(normalizeSender("09991234567")).toBe(n);
+    expect(normalizeSender("+98 999 123 4567")).toBe(n);
+    expect(normalizeSender("۰۹۹۹۱۲۳۴۵۶۷")).toBe(n);
+    expect(normalizeSender("BluBank")).toBe("blubank");
   });
 });

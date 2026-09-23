@@ -2,7 +2,7 @@ import type { TxType } from "../types";
 
 export default function TypeToggle({ value, onChange }: { value: TxType; onChange: (t: TxType) => void }) {
   return (
-    <div className="segmented" role="radiogroup">
+    <div className="seg">
       <button type="button" className={value === "expense" ? "on expense" : ""} onClick={() => onChange("expense")}>
         هزینه
       </button>

@@ -1,89 +1,42 @@
-import { useState } from "react";
-import { formatRelative, formatTime, formatToman } from "../lib/format";
+import { Banknote, Tag as TagIcon } from "lucide-react";
+import { formatTime } from "../lib/format";
 import { useStore } from "../store/useStore";
-import type { Bank, Tag, Transaction, TxType } from "../types";
-import TagPicker from "./TagPicker";
-import TypeToggle from "./TypeToggle";
+import type { Bank, Tag, Transaction } from "../types";
+import Amount from "./Amount";
+import TagChips from "./TagChips";
 
 interface Props {
   tx: Transaction;
   bank: Bank | undefined;
   tags: Tag[];
-  tagColor: (label: string | null) => string;
+  onOpen: () => void;
 }
 
-const SOURCE_LABEL = { sms: "پیامک", notification: "اعلان", manual: "دستی" } as const;
-
-export default function TransactionRow({ tx, bank, tags, tagColor }: Props) {
+export default function TransactionRow({ tx, bank, tags, onOpen }: Props) {
   const updateTransaction = useStore((s) => s.updateTransaction);
-  const deleteTransaction = useStore((s) => s.deleteTransaction);
-  const [editing, setEditing] = useState(false);
-  const [note, setNote] = useState(tx.note ?? "");
-  const [type, setType] = useState<TxType>(tx.type);
-  const [showRaw, setShowRaw] = useState(false);
-  const date = new Date(tx.timestamp);
-  const isOpen = editing || !tx.tagged;
-
-  function pick(label: string) {
-    updateTransaction(tx.id, { tag: label, note: note.trim() || null, type, tagged: true, typeUncertain: false });
-    setEditing(false);
-  }
-
-  const classes = ["tx", tx.tagged ? "tx-tagged" : "tx-untagged", tx.typeUncertain ? "tx-uncertain" : ""].join(" ");
+  const tag = tx.tag ? tags.find((t) => t.label === tx.tag) : undefined;
+  const bankName = tx.bankId === "cash" ? "نقدی" : (bank?.name ?? "بانک");
+  const title = tx.tag ?? (tx.note || bankName);
+  const sub = [tx.tag ? bankName : null, formatTime(new Date(tx.timestamp)), tx.tag && tx.note ? tx.note : null].filter(Boolean).join(" · ");
 
   return (
-    <li className={classes}>
-      <div className="tx-head" onClick={() => tx.tagged && setEditing((e) => !e)}>
-        <div className={`tx-amount ${tx.type}`}>
-          {tx.type === "income" ? "+" : "−"}
-          {formatToman(tx.amount)}
+    <div className="tx" onClick={onOpen}>
+      <div className="tx-main">
+        <div className="tx-icon" style={{ "--c": tag?.color ?? "var(--muted)" } as React.CSSProperties}>
+          {tx.tag ? <TagIcon size={19} /> : <Banknote size={20} />}
         </div>
-        <div className="tx-meta">
-          <span>{tx.bankId === "cash" ? "نقدی" : (bank?.name ?? "بانک نامشخص")}</span>
-          <span className="muted" title={date.toLocaleString("fa-IR")}>
-            {formatTime(date)} · {formatRelative(date)} · {SOURCE_LABEL[tx.source]}
-          </span>
-        </div>
-        {tx.tagged && !editing && (
-          <div className="tx-tag">
-            <span className="chip chip-active chip-sm" style={{ "--chip": tagColor(tx.tag) } as React.CSSProperties}>
-              {tx.tag}
-            </span>
-            {tx.note && <span className="muted small ellipsis">{tx.note}</span>}
+        <div className="grow">
+          <div className="tx-title row" style={{ gap: 6 }}>
+            {title}
+            {tx.typeUncertain && <span className="dot warn" title="نوع نامطمئن" />}
           </div>
-        )}
+          <div className="tx-sub">{sub}</div>
+        </div>
+        <Amount rial={tx.amount} type={tx.type} className="tx-amount" />
       </div>
-
-      {tx.typeUncertain && (
-        <div className="warn small">⚠️ نوع تراکنش (هزینه/درآمد) به‌طور خودکار تشخیص داده نشد — لطفاً بررسی کنید.</div>
+      {!tx.tagged && (
+        <TagChips tags={tags} value={null} scroll onPick={(label) => updateTransaction(tx.id, { tag: label, tagged: true, typeUncertain: false })} />
       )}
-
-      {isOpen && (
-        <div className="tx-edit">
-          <div className="row">
-            <TypeToggle value={type} onChange={setType} />
-            <input className="grow" placeholder="یادداشت (اختیاری)" value={note} onChange={(e) => setNote(e.target.value)} />
-          </div>
-          <TagPicker tags={tags} value={tx.tag} onPick={pick} />
-          <div className="row small">
-            {tx.rawText && (
-              <button type="button" className="link" onClick={() => setShowRaw((s) => !s)}>
-                {showRaw ? "پنهان کردن متن اصلی" : "نمایش متن اصلی"}
-              </button>
-            )}
-            <span className="grow" />
-            {tx.tagged && (
-              <button type="button" className="link" onClick={() => setEditing(false)}>
-                بستن
-              </button>
-            )}
-            <button type="button" className="link danger" onClick={() => confirm("این تراکنش حذف شود؟") && deleteTransaction(tx.id)}>
-              حذف
-            </button>
-          </div>
-          {showRaw && <pre className="raw">{tx.rawText}</pre>}
-        </div>
-      )}
-    </li>
+    </div>
   );
 }

@@ -13,19 +13,17 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Native-side persistence (SharedPreferences), shared by the notification listener, the SMS
- * receiver, the reminder alarm and the Capacitor plugin.
+ * Native-side persistence (SharedPreferences), shared by the SMS receiver, the reminder alarm and
+ * the Capacitor plugin.
  *
- * Captures are queued here because they arrive while the app (and its WebView) may be closed.
- * The JS side drains the queue on launch / resume, parses the texts with the bank rules and acks.
+ * SMS from bank senders are queued here because they arrive while the app (and its WebView) may be
+ * closed. The JS side drains the queue on launch / resume, parses the texts and acks.
  * Parsing deliberately happens only in JS (src/lib/parser.ts) so there is one implementation.
  */
 public final class CaptureStore {
     private static final String PREFS = "personalcost_native";
     private static final String KEY_QUEUE = "queue";
-    private static final String KEY_PACKAGES = "filter_packages";
     private static final String KEY_SENDERS = "filter_senders";
-    private static final String KEY_CAPTURE_ALL = "capture_all";
     private static final String KEY_REMINDER_ENABLED = "reminder_enabled";
     private static final String KEY_REMINDER_HOUR = "reminder_hour";
     private static final String KEY_REMINDER_MINUTE = "reminder_minute";
@@ -40,23 +38,8 @@ public final class CaptureStore {
 
     // ---------------------------------------------------------------- filters
 
-    public static synchronized void setFilters(Context c, JSONArray packages, JSONArray senders, boolean captureAll) {
-        prefs(c).edit()
-                .putString(KEY_PACKAGES, packages.toString())
-                .putString(KEY_SENDERS, senders.toString())
-                .putBoolean(KEY_CAPTURE_ALL, captureAll)
-                .commit();
-    }
-
-    public static boolean captureAll(Context c) {
-        return prefs(c).getBoolean(KEY_CAPTURE_ALL, false);
-    }
-
-    public static boolean matchesPackage(Context c, String pkg) {
-        for (String p : stringSet(prefs(c).getString(KEY_PACKAGES, "[]"))) {
-            if (p.trim().equalsIgnoreCase(pkg)) return true;
-        }
-        return false;
+    public static synchronized void setSenders(Context c, JSONArray senders) {
+        prefs(c).edit().putString(KEY_SENDERS, senders.toString()).commit();
     }
 
     public static boolean matchesSender(Context c, String sender) {
@@ -97,17 +80,14 @@ public final class CaptureStore {
 
     // ---------------------------------------------------------------- queue
 
-    /** @param matched whether origin matched a bank filter (false = captured only because of capture-all). */
-    public static synchronized void enqueue(Context c, String source, String origin, String text, long ts, boolean matched) {
+    public static synchronized void enqueue(Context c, String sender, String text, long ts) {
         JSONArray q = queue(c);
         try {
             q.put(new JSONObject()
                     .put("id", UUID.randomUUID().toString())
-                    .put("source", source)
-                    .put("origin", origin)
+                    .put("sender", sender)
                     .put("text", text)
-                    .put("ts", ts)
-                    .put("matched", matched));
+                    .put("ts", ts));
         } catch (JSONException e) {
             return;
         }
@@ -134,14 +114,8 @@ public final class CaptureStore {
         prefs(c).edit().putString(KEY_QUEUE, kept.toString()).commit();
     }
 
-    public static synchronized int pendingMatched(Context c) {
-        JSONArray q = queue(c);
-        int n = 0;
-        for (int i = 0; i < q.length(); i++) {
-            JSONObject o = q.optJSONObject(i);
-            if (o != null && o.optBoolean("matched")) n++;
-        }
-        return n;
+    public static synchronized int pending(Context c) {
+        return queue(c).length();
     }
 
     // ---------------------------------------------------------------- reminder
