@@ -1,0 +1,76 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck and test
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Sync web build into the Android project
+        run: npx cap sync android
+
+      - name: Build signed release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon -PversionCode=${{ github.run_number }}
+
+      - name: Collect APK
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk out/personalcost.apk
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: personalcost-apk
+          path: out/personalcost.apk
+
+      # Stable download URL: the "apk" pre-release always holds the latest build at
+      # .../releases/download/apk/personalcost.apk
+      - name: Publish to the rolling "apk" release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk
+          name: PersonalCost APK (آخرین نسخه)
+          prerelease: true
+          files: out/personalcost.apk
+          body: |
+            آخرین نسخه‌ی اپلیکیشن اندروید PersonalCost — ساخته‌شده به صورت خودکار از شاخه ${{ github.ref_name }} (${{ github.sha }}).
+
+            **نصب:** فایل personalcost.apk را دانلود و باز کنید (اجازه‌ی نصب از منابع ناشناس لازم است). نسخه‌های جدید روی نسخه قبلی نصب می‌شوند و داده‌ها حفظ می‌شوند.
