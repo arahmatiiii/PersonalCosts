@@ -2,7 +2,8 @@ name: Deploy web to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    paths: ["web/**", ".github/workflows/deploy-web.yml"]
+  pull_request:
     paths: ["web/**", ".github/workflows/deploy-web.yml"]
   workflow_dispatch:
 
@@ -12,7 +13,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -42,7 +43,9 @@ jobs:
         with:
           path: web/dist
 
+  # Every branch/PR is built and tested; only main is deployed.
   deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

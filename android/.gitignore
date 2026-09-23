@@ -1,0 +1,12 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+# Firebase config for the Android app — download from the Firebase console, never commit.
+app/google-services.json
+*.jks
+*.keystore

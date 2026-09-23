@@ -1,0 +1,46 @@
+name: Android APK
+
+on:
+  push:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  pull_request:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The real Firebase config comes from the GOOGLE_SERVICES_JSON secret (contents of google-services.json).
+      # Without it, a dummy config is used so the build still verifies the code compiles —
+      # that APK won't be able to talk to Firebase.
+      - name: Write google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON secret not set — building with a dummy Firebase config"
+            cp ci/google-services.dummy.json app/google-services.json
+          fi
+
+      - run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: personalcost-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
