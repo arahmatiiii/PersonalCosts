@@ -1,88 +1,129 @@
-import { Inbox, Plus } from "lucide-react";
+import { ChevronLeft, Inbox, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { dayKey, faNum, formatDay, rialToToman, startOfDay } from "../lib/format";
+import { faNum, rialToToman, startOfDay } from "../lib/format";
+import { fundsForMonth } from "../lib/funds";
+import { monthLabel, monthOf, monthRange, MONTHS, toJalali } from "../lib/jalali";
 import { useStore } from "../store/useStore";
-import type { Transaction } from "../types";
 import AddSheet from "./AddSheet";
+import Amount from "./Amount";
+import FundCards from "./FundCards";
+import ReviewCard from "./ReviewCard";
 import TransactionRow from "./TransactionRow";
 import TransactionSheet from "./TransactionSheet";
+import WeekBars from "./WeekBars";
 
-const PAGE_DAYS = 7;
+const WEEKDAY = new Intl.DateTimeFormat("fa-IR", { weekday: "long" });
 
 export default function HomePage() {
-  const { transactions, banks, tags } = useStore();
-  const [daysBack, setDaysBack] = useState(PAGE_DAYS - 1);
+  const { transactions, banks, tags, setActiveTab } = useStore();
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
 
+  const now = new Date();
+  const month = monthOf(now);
+  const [mFrom] = monthRange(month);
+  const todayStart = startOfDay(now).getTime();
+  const { jd, jm } = toJalali(now);
+
   const bankById = useMemo(() => new Map(banks.map((b) => [b.id, b])), [banks]);
   const sorted = useMemo(() => [...transactions].sort((a, b) => b.timestamp - a.timestamp), [transactions]);
-  const from = useMemo(() => {
-    const f = startOfDay(new Date());
-    f.setDate(f.getDate() - daysBack);
-    return f.getTime();
-  }, [daysBack]);
+  const monthTx = sorted.filter((t) => t.timestamp >= mFrom);
+  const monthSpent = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const todaySpent = monthTx.filter((t) => t.type === "expense" && t.timestamp >= todayStart).reduce((s, t) => s + t.amount, 0);
+  const funds = useMemo(() => fundsForMonth(transactions, month), [transactions, month.jy, month.jm]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fundsLeft = funds.reduce((s, f) => s + f.remaining, 0);
+  const untagged = sorted.filter((t) => !t.tagged).reverse(); // oldest first
+  const recent = sorted.slice(0, 5);
 
-  const untagged = sorted.filter((t) => !t.tagged);
-  const olderUntagged = untagged.filter((t) => t.timestamp < from);
-  const hasOlder = sorted.some((t) => t.timestamp < from && t.tagged);
+  const topTags = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of monthTx) if (t.type === "expense" && t.tag) m.set(t.tag, (m.get(t.tag) ?? 0) + t.amount);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  }, [monthTx]);
 
-  const groups = useMemo(() => {
-    const m = new Map<string, { date: Date; items: Transaction[] }>();
-    for (const t of sorted) {
-      if (t.timestamp < from) break;
-      const d = new Date(t.timestamp);
-      const k = dayKey(d);
-      if (!m.has(k)) m.set(k, { date: d, items: [] });
-      m.get(k)!.items.push(t);
-    }
-    return [...m.values()];
-  }, [sorted, from]);
-
-  const todayStart = startOfDay(new Date()).getTime();
-  const today = sorted.filter((t) => t.timestamp >= todayStart);
-  const todayExpense = today.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   const open = openId ? transactions.find((t) => t.id === openId) : undefined;
-
-  const group = (title: string, items: Transaction[]) => (
-    <section key={title}>
-      <div className="day-title">{title}</div>
-      <div className="card tx-group">
-        {items.map((t) => (
-          <TransactionRow key={t.id} tx={t} bank={bankById.get(t.bankId)} tags={tags} onOpen={() => setOpenId(t.id)} />
-        ))}
-      </div>
-    </section>
-  );
 
   return (
     <>
+      <header className="home-head">
+        <div>
+          <div className="muted small">{WEEKDAY.format(now)}</div>
+          <div className="home-date">
+            {faNum(jd)} {MONTHS[jm - 1]}
+          </div>
+        </div>
+      </header>
+
       <div className="hero">
-        <span className="label">هزینه امروز</span>
+        <span className="label">خرج {monthLabel(month)}</span>
         <span className="value num">
-          {faNum(rialToToman(todayExpense))}
+          {faNum(rialToToman(monthSpent))}
           <small>تومان</small>
         </span>
-        <div className="meta">
-          <span className="pill">{faNum(today.length)} تراکنش</span>
-          {untagged.length > 0 && <span className="pill">{faNum(untagged.length)} بدون تگ</span>}
+        <div className="hero-stats">
+          <div>
+            <span>امروز</span>
+            <b className="num">{faNum(rialToToman(todaySpent))}</b>
+          </div>
+          {funds.length > 0 && (
+            <div>
+              <span>مانده‌ی پول‌ها</span>
+              <b className="num">{faNum(rialToToman(fundsLeft))}</b>
+            </div>
+          )}
         </div>
+        <WeekBars transactions={transactions} />
       </div>
 
-      {olderUntagged.length > 0 && group("بدون تگ", olderUntagged)}
-      {groups.map((g) => group(formatDay(g.date), g.items))}
+      <ReviewCard items={untagged} />
 
-      {groups.length === 0 && olderUntagged.length === 0 && (
-        <div className="empty">
-          <Inbox size={36} strokeWidth={1.5} />
-          <span>هنوز تراکنشی نیست</span>
+      {funds.length > 0 && (
+        <section>
+          <div className="section-title">پول‌ها</div>
+          <FundCards funds={funds} tags={tags} />
+        </section>
+      )}
+
+      {topTags.length > 0 && (
+        <section>
+          <div className="section-title">بیشترین خرج این ماه</div>
+          <div className="top-tags">
+            {topTags.map(([label, amount], i) => {
+              const color = tags.find((t) => t.label === label)?.color ?? "var(--muted)";
+              return (
+                <div key={label} className="card top-tag" style={{ "--c": color } as React.CSSProperties}>
+                  <span className="top-rank">{faNum(i + 1)}</span>
+                  <span className="top-name">{label}</span>
+                  <Amount rial={amount} />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <div className="section-head">
+          <span className="section-title">اخیر</span>
+          {sorted.length > recent.length && (
+            <button type="button" className="link-btn" onClick={() => setActiveTab("history")}>
+              همه <ChevronLeft size={16} />
+            </button>
+          )}
         </div>
-      )}
-      {hasOlder && (
-        <button type="button" className="link-btn" onClick={() => setDaysBack((d) => d + PAGE_DAYS)}>
-          روزهای قبل
-        </button>
-      )}
+        {recent.length ? (
+          <div className="card tx-group">
+            {recent.map((t) => (
+              <TransactionRow key={t.id} tx={t} bank={bankById.get(t.bankId)} tags={tags} showDate={t.timestamp < todayStart} onOpen={() => setOpenId(t.id)} />
+            ))}
+          </div>
+        ) : (
+          <div className="empty">
+            <Inbox size={36} strokeWidth={1.5} />
+            <span>هنوز تراکنشی نیست</span>
+          </div>
+        )}
+      </section>
 
       <button type="button" className="fab" onClick={() => setAdding(true)} aria-label="افزودن">
         <Plus size={26} />

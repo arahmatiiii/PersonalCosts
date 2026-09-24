@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { autoFund } from "../lib/funds";
 import { newId } from "../lib/id";
 import { DEFAULT_SETTINGS, TAG_COLORS, type Bank, type Tag, type Transaction, type UserSettings } from "../types";
 
-export type TabId = "home" | "stats" | "settings";
+export type TabId = "home" | "history" | "stats" | "settings";
 
 export interface AppState {
   activeTab: TabId;
@@ -16,6 +17,8 @@ export interface AppState {
 
   addTransactions: (txs: Transaction[]) => void;
   updateTransaction: (id: string, patch: Partial<Omit<Transaction, "id">>) => void;
+  /** Tag a transaction; an expense whose tag matches a «پول» that month is paid from it. */
+  tagTransaction: (id: string, tag: string) => void;
   deleteTransaction: (id: string) => void;
 
   addBank: (name: string, sender: string) => void;
@@ -83,6 +86,12 @@ export const useStore = create<AppState>()(
       },
       updateTransaction: (id, patch) =>
         set((s) => ({ transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
+      tagTransaction: (id, tag) =>
+        set((s) => ({
+          transactions: s.transactions.map((t) =>
+            t.id === id ? { ...t, tag, tagged: true, typeUncertain: false, fund: autoFund(t, tag, s.transactions) } : t,
+          ),
+        })),
       deleteTransaction: (id) => set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
 
       addBank: (name, sender) => set((s) => ({ banks: [...s.banks, { id: newId(), name, sender }] })),
@@ -98,8 +107,9 @@ export const useStore = create<AppState>()(
       name: "personalcost-store",
       version: 2,
       migrate: (p, v) => migrate(p, v) as AppState,
+      merge: (persisted, current) => ({ ...current, ...(persisted as Partial<AppState>), activeTab: "home" }),
+      // activeTab is not persisted: the app always opens on Home.
       partialize: (s) => ({
-        activeTab: s.activeTab,
         transactions: s.transactions,
         banks: s.banks,
         tags: s.tags,

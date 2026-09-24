@@ -270,3 +270,63 @@ input::placeholder { color: var(--muted); }
 .time-pick { display: flex; gap: 6px; align-items: center; direction: ltr; }
 .time-pick select { width: 72px; text-align: center; padding: 0 8px; }
 select:disabled { opacity: 0.4; }
+
+/* ---------- v3: home, history, stats filters ---------- */
+.tx { width: 100%; text-align: inherit; flex-direction: row; align-items: center; gap: 12px; }
+.tx:active { background: var(--soft); }
+.tx-group { overflow: hidden; }
+.tx-title { display: flex; align-items: center; gap: 6px; }
+.home-head { display: flex; align-items: flex-end; justify-content: space-between; }
+.home-date { font-size: 1.35rem; font-weight: 700; }
+.hero { gap: 6px; position: relative; overflow: hidden; }
+.hero::after { content: ""; position: absolute; width: 220px; height: 220px; border-radius: 50%; background: rgba(255,255,255,.06); top: -90px; left: -70px; pointer-events: none; }
+.hero-stats { display: flex; gap: 22px; margin-top: 4px; }
+.hero-stats > div { display: flex; flex-direction: column; }
+.hero-stats span { font-size: 0.78rem; opacity: 0.7; }
+.hero-stats b { font-size: 1.05rem; }
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 14px; direction: ltr; }
+.week-col { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 0.72rem; opacity: 0.75; }
+.week-col.today { opacity: 1; font-weight: 700; }
+.week-bar { height: 54px; width: 100%; max-width: 22px; display: flex; align-items: flex-end; }
+.week-bar > div { width: 100%; border-radius: 6px; background: rgba(255,255,255,.85); transition: height .3s; }
+.week-col:not(.today) .week-bar > div { background: rgba(255,255,255,.45); }
+
+.review { padding: 16px; display: flex; flex-direction: column; gap: 12px; border: 1.5px solid var(--primary-soft); }
+.review-icon { color: var(--primary); }
+.review-q { font-weight: 700; }
+.review-amount { display: flex; flex-direction: column; font-size: 1.6rem; font-weight: 700; gap: 2px; animation: fade .2s; }
+.review-amount .small { font-weight: 400; }
+
+.funds { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px 6px; }
+.funds::-webkit-scrollbar { display: none; }
+.fund { --c: var(--primary); flex: none; width: 230px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.fund-icon { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); }
+.fund-name { font-weight: 600; }
+.fund-left { font-size: 1.25rem; font-weight: 700; }
+
+.top-tags { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.top-tag { --c: var(--muted); padding: 12px; display: flex; flex-direction: column; gap: 4px; border-top: 3px solid var(--c); min-width: 0; }
+.top-rank { font-size: 0.75rem; color: var(--muted); }
+.top-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-tag .amount { font-size: 0.85rem; }
+
+.section-head { display: flex; align-items: center; justify-content: space-between; }
+.section-head .section-title { padding-bottom: 8px; }
+.section-head .link-btn { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px 8px; }
+.month-head { display: flex; align-items: baseline; justify-content: space-between; font-weight: 700; font-size: 1.05rem; padding: 0 6px; }
+.month-totals { display: flex; gap: 12px; font-size: 0.85rem; }
+
+.month-nav { display: flex; align-items: center; justify-content: space-between; font-weight: 700; }
+.date-pick { display: flex; gap: 6px; flex: 1; }
+.date-pick select { flex: 1; width: auto; min-width: 0; padding: 0 10px; }
+.date-pick select:nth-child(2) { flex: 1.6; }
+.range-label { width: 20px; flex: none; }
+.search { display: flex; align-items: center; gap: 6px; background: var(--soft); border-radius: 14px; padding: 0 12px; color: var(--muted); }
+.search input { background: transparent; padding: 0 4px; }
+.search input:focus { background: transparent; border-color: transparent; }
+.chip-sep { width: 1px; background: var(--line); flex: none; margin: 4px 2px; }
+.bar-row { width: 100%; text-align: inherit; }
+.sheet-amount { text-align: center; font-size: 1.8rem; font-weight: 700; }
+.sheet-amount .small { font-weight: 400; }
+.fund-pick { display: flex; align-items: center; gap: 10px; }
+.fund-pick-label { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 0.88rem; flex: none; }

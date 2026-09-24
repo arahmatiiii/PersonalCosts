@@ -18,6 +18,8 @@ export interface Transaction {
   tagged: boolean;
   /** Parser couldn't tell income from expense and defaulted to "expense" — needs review. */
   typeUncertain: boolean;
+  /** Expenses only: which «پول» (a tagged income of the same month) this was paid from. */
+  fund?: string | null;
   createdAt: number;
 }
 

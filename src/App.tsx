@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import BottomNav from "./components/BottomNav";
+import HistoryPage from "./components/HistoryPage";
 import HomePage from "./components/HomePage";
 import SettingsPage from "./components/SettingsPage";
 import StatsPage from "./components/StatsPage";
@@ -21,7 +22,7 @@ export default function App() {
   return (
     <>
       <main className="content" key={activeTab}>
-        {activeTab === "stats" ? <StatsPage /> : activeTab === "settings" ? <SettingsPage /> : <HomePage />}
+        {activeTab === "history" ? <HistoryPage /> : activeTab === "stats" ? <StatsPage /> : activeTab === "settings" ? <SettingsPage /> : <HomePage />}
       </main>
       <BottomNav />
     </>
