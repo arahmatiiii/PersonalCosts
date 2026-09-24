@@ -1,20 +1,33 @@
 import type { Transaction } from "../types";
-import { monthOf, monthRange, type JMonth } from "./jalali";
+import { addMonths, monthKey, monthOf, monthRange, MONTHS, type JMonth } from "./jalali";
 
 /**
- * «پول‌ها»: every tagged income is a pot of money for its Jalali month (e.g. «حقوق»).
- * An expense can say which pot it was paid from (`fund`); the pot's remaining amount for that month
- * goes down accordingly.
+ * «پول‌ها»: every tagged income is a pot of money for its Jalali month (e.g. «حقوق مهر»).
+ * An expense can say which pot paid for it (`fund` + `fundMonth`); that pot's remaining amount goes
+ * down. The pot may be from a different month than the expense — e.g. a late-Shahrivar purchase paid
+ * from Mehr's salary.
  */
 export interface Fund {
   label: string;
   total: number; // Rial in
-  spent: number; // Rial out (expenses with fund === label in the same month)
+  spent: number; // Rial out (expenses paid from this pot, whatever their own date)
   remaining: number;
+}
+
+export interface FundRef {
+  label: string;
+  month: JMonth;
+  key: string; // monthKey(month)
+}
+
+/** Which month's pot an expense was paid from (older data has no fundMonth: its own month). */
+export function fundMonthOf(t: Pick<Transaction, "timestamp" | "fundMonth">): string {
+  return t.fundMonth ?? monthKey(monthOf(t.timestamp));
 }
 
 export function fundsForMonth(transactions: Transaction[], month: JMonth): Fund[] {
   const [from, to] = monthRange(month);
+  const key = monthKey(month);
   const m = new Map<string, Fund>();
   for (const t of transactions) {
     if (t.type !== "income" || !t.tag || t.timestamp < from || t.timestamp > to) continue;
@@ -23,25 +36,38 @@ export function fundsForMonth(transactions: Transaction[], month: JMonth): Fund[
     m.set(t.tag, f);
   }
   for (const t of transactions) {
-    if (t.type !== "expense" || !t.fund || t.timestamp < from || t.timestamp > to) continue;
+    if (t.type !== "expense" || !t.fund || fundMonthOf(t) !== key) continue;
     const f = m.get(t.fund);
     if (f) f.spent += t.amount;
   }
   return [...m.values()].map((f) => ({ ...f, remaining: f.total - f.spent })).sort((a, b) => b.total - a.total);
 }
 
-/** Labels of the pots available to an expense (tagged incomes in its month). */
-export function fundLabelsFor(tx: Pick<Transaction, "timestamp">, transactions: Transaction[]): string[] {
-  return fundsForMonth(transactions, monthOf(tx.timestamp)).map((f) => f.label);
+/** Pots an expense can be paid from: its own month first, then the nearest months (±2). */
+export function fundOptionsFor(tx: Pick<Transaction, "timestamp">, transactions: Transaction[], span = 2): FundRef[] {
+  const base = monthOf(tx.timestamp);
+  const offsets = [0];
+  for (let i = 1; i <= span; i++) offsets.push(i, -i);
+  return offsets.flatMap((o) => {
+    const month = addMonths(base, o);
+    return fundsForMonth(transactions, month).map((f) => ({ label: f.label, month, key: monthKey(month) }));
+  });
+}
+
+export function fundDisplay(label: string, fundKey: string, txTimestamp: number): string {
+  if (fundKey === monthKey(monthOf(txTimestamp))) return label;
+  const jm = Number(fundKey.split("-")[1]);
+  return `${label} ${MONTHS[jm - 1]}`;
 }
 
 /**
- * When an expense gets tag `tag`: if a pot with the same name exists that month, pay from it
- * automatically (unless a pot was already chosen by hand).
+ * When an expense gets tag `tag`: if a pot with the same name exists in its month, pay from it
+ * automatically — unless a pot was already chosen.
  */
-export function autoFund(tx: Transaction, tag: string | null, transactions: Transaction[]): string | null {
-  if (tx.type !== "expense") return null;
-  if (tx.fund) return tx.fund;
-  if (tag && fundLabelsFor(tx, transactions).includes(tag)) return tag;
-  return null;
+export function autoFund(tx: Transaction, tag: string | null, transactions: Transaction[]): Pick<Transaction, "fund" | "fundMonth"> {
+  if (tx.type !== "expense") return { fund: null, fundMonth: null };
+  if (tx.fund) return { fund: tx.fund, fundMonth: tx.fundMonth ?? null };
+  const key = monthKey(monthOf(tx.timestamp));
+  if (tag && fundsForMonth(transactions, monthOf(tx.timestamp)).some((f) => f.label === tag)) return { fund: tag, fundMonth: key };
+  return { fund: null, fundMonth: null };
 }

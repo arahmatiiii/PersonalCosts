@@ -18,8 +18,10 @@ export interface Transaction {
   tagged: boolean;
   /** Parser couldn't tell income from expense and defaulted to "expense" — needs review. */
   typeUncertain: boolean;
-  /** Expenses only: which «پول» (a tagged income of the same month) this was paid from. */
+  /** Expenses only: which «پول» (tag of an income) paid for this… */
   fund?: string | null;
+  /** …and that pot's Jalali month ("1405-7"). Missing on older data = the expense's own month. */
+  fundMonth?: string | null;
   createdAt: number;
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction } from "../types";
-import { autoFund, fundsForMonth } from "./funds";
+import { autoFund, fundOptionsFor, fundsForMonth } from "./funds";
 import { addMonths, fromJalali, monthLength, monthRange, toJalali } from "./jalali";
 
 describe("jalali", () => {
@@ -48,9 +48,17 @@ describe("funds", () => {
   });
 
   it("auto-assigns a pot when the expense tag matches one that month", () => {
-    expect(autoFund(tx({}), "حقوق", [salary])).toBe("حقوق");
-    expect(autoFund(tx({}), "اسنپ", [salary])).toBeNull();
-    expect(autoFund(tx({ fund: "پس‌انداز" }), "حقوق", [salary])).toBe("پس‌انداز");
-    expect(autoFund(tx({ timestamp: new Date(2026, 7, 5).getTime() }), "حقوق", [salary])).toBeNull();
+    expect(autoFund(tx({}), "حقوق", [salary])).toEqual({ fund: "حقوق", fundMonth: "1405-7" });
+    expect(autoFund(tx({}), "اسنپ", [salary]).fund).toBeNull();
+    expect(autoFund(tx({ fund: "پس‌انداز", fundMonth: "1405-6" }), "حقوق", [salary])).toEqual({ fund: "پس‌انداز", fundMonth: "1405-6" });
+    expect(autoFund(tx({ timestamp: new Date(2026, 7, 5).getTime() }), "حقوق", [salary]).fund).toBeNull();
+  });
+
+  it("lets an expense be paid from a pot of a nearby month", () => {
+    const shahrivarBuy = tx({ timestamp: new Date(2026, 8, 20).getTime(), amount: 40_000 }); // 29 Shahrivar
+    const opts = fundOptionsFor(shahrivarBuy, [salary, oldSalary]);
+    expect(opts.map((o) => o.key)).toEqual(["1405-7", "1405-5"]); // Mehr's pot offered for a Shahrivar purchase
+    const paid = { ...shahrivarBuy, fund: "حقوق", fundMonth: "1405-7" };
+    expect(fundsForMonth([salary, paid], { jy: 1405, jm: 7 })[0]).toMatchObject({ spent: 40_000, remaining: 60_000 });
   });
 });

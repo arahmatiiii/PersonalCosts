@@ -89,7 +89,7 @@ export const useStore = create<AppState>()(
       tagTransaction: (id, tag) =>
         set((s) => ({
           transactions: s.transactions.map((t) =>
-            t.id === id ? { ...t, tag, tagged: true, typeUncertain: false, fund: autoFund(t, tag, s.transactions) } : t,
+            t.id === id ? { ...t, tag, tagged: true, typeUncertain: false, ...autoFund(t, tag, s.transactions) } : t,
           ),
         })),
       deleteTransaction: (id) => set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
