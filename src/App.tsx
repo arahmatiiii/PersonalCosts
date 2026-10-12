@@ -4,6 +4,7 @@ import HistoryPage from "./components/HistoryPage";
 import HomePage from "./components/HomePage";
 import SettingsPage from "./components/SettingsPage";
 import StatsPage from "./components/StatsPage";
+import Toast from "./components/Toast";
 import { startNativeBridge } from "./native/bridge";
 import { isNative } from "./native/personalCost";
 import { useStore } from "./store/useStore";
@@ -24,6 +25,7 @@ export default function App() {
       <main className="content" key={activeTab}>
         {activeTab === "history" ? <HistoryPage /> : activeTab === "stats" ? <StatsPage /> : activeTab === "settings" ? <SettingsPage /> : <HomePage />}
       </main>
+      <Toast />
       <BottomNav />
     </>
   );

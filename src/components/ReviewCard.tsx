@@ -3,12 +3,13 @@ import { useState } from "react";
 import { formatRelative } from "../lib/format";
 import { useStore } from "../store/useStore";
 import type { Transaction } from "../types";
+import { haptic } from "../lib/haptic";
 import Amount from "./Amount";
 import TagChips from "./TagChips";
 
 /** One untagged transaction at a time: «این چی بود؟» + one-tap tags. */
 export default function ReviewCard({ items }: { items: Transaction[] }) {
-  const { tags, banks, tagTransaction } = useStore();
+  const { tags, banks, tagTransaction, updateTransaction, showToast } = useStore();
   const [skip, setSkip] = useState(0);
   if (items.length === 0) return null;
   const i = skip % items.length;
@@ -35,7 +36,13 @@ export default function ReviewCard({ items }: { items: Transaction[] }) {
           {bank} · {formatRelative(new Date(tx.timestamp))}
         </span>
       </div>
-      <TagChips tags={tags} value={null} scroll onPick={(label) => tagTransaction(tx.id, label)} />
+      <TagChips tags={tags} value={null} scroll onPick={(label) => {
+          haptic();
+          tagTransaction(tx.id, label);
+          const { id, ...before } = tx;
+          showToast(`«${label}» ثبت شد`, () => updateTransaction(id, before));
+        }}
+      />
     </div>
   );
 }

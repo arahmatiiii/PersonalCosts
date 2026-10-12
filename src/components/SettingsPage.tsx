@@ -1,5 +1,6 @@
 import { Check, Download, Plus, ShieldCheck, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { faNum, normalizeDigits } from "../lib/format";
 import { isNative, PersonalCost, type CaptureStatus } from "../native/personalCost";
 import { makeBackup, useStore, type BackupData } from "../store/useStore";
 
@@ -213,6 +214,28 @@ export default function SettingsPage() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="تورم">
+        <div className="list-row">
+          <div className="grow">
+            <div style={{ fontWeight: 600 }}>نرخ تورم سالانه</div>
+            <div className="muted small">برای «به ارزش امروز» و مقایسه‌ی واقعی در آمار</div>
+          </div>
+          <div className="pct-input">
+            <input
+              className="num"
+              inputMode="numeric"
+              value={faNum(settings.inflationRate)}
+              onChange={(e) => {
+                const v = Number(normalizeDigits(e.target.value).replace(/\D/g, ""));
+                saveSettings({ inflationRate: Math.min(500, v) });
+              }}
+              aria-label="نرخ تورم سالانه"
+            />
+            <span>٪</span>
           </div>
         </div>
       </Section>

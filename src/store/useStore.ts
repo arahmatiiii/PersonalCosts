@@ -6,12 +6,19 @@ import { DEFAULT_SETTINGS, TAG_COLORS, type Bank, type Tag, type Transaction, ty
 
 export type TabId = "home" | "history" | "stats" | "settings";
 
+export interface Toast {
+  id: number;
+  text: string;
+  undo?: () => void;
+}
+
 export interface AppState {
   activeTab: TabId;
   transactions: Transaction[];
   banks: Bank[];
   tags: Tag[];
   settings: UserSettings;
+  toast: Toast | null;
 
   setActiveTab: (t: TabId) => void;
 
@@ -29,6 +36,8 @@ export interface AppState {
 
   saveSettings: (patch: Partial<UserSettings>) => void;
   importBackup: (data: BackupData) => void;
+  showToast: (text: string, undo?: () => void) => void;
+  hideToast: () => void;
 }
 
 export interface BackupData {
@@ -78,6 +87,7 @@ export const useStore = create<AppState>()(
       banks: [],
       tags: defaultTags(),
       settings: DEFAULT_SETTINGS,
+      toast: null,
 
       setActiveTab: (activeTab) => set({ activeTab }),
 
@@ -102,12 +112,17 @@ export const useStore = create<AppState>()(
 
       saveSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
       importBackup: (d) => set({ transactions: d.transactions, banks: d.banks, tags: d.tags, settings: { ...DEFAULT_SETTINGS, ...d.settings } }),
+      showToast: (text, undo) => set({ toast: { id: Date.now(), text, undo } }),
+      hideToast: () => set({ toast: null }),
     }),
     {
       name: "personalcost-store",
       version: 2,
       migrate: (p, v) => migrate(p, v) as AppState,
-      merge: (persisted, current) => ({ ...current, ...(persisted as Partial<AppState>), activeTab: "home" }),
+      merge: (persisted, current) => {
+        const p = persisted as Partial<AppState>;
+        return { ...current, ...p, settings: { ...DEFAULT_SETTINGS, ...p.settings }, activeTab: "home" };
+      },
       // activeTab is not persisted: the app always opens on Home.
       partialize: (s) => ({
         transactions: s.transactions,

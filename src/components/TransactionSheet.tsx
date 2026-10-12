@@ -3,13 +3,14 @@ import { useMemo, useState } from "react";
 import { autoFund, fundDisplay, fundMonthOf, fundOptionsFor } from "../lib/funds";
 import { useStore } from "../store/useStore";
 import type { Transaction, TxType } from "../types";
+import { haptic } from "../lib/haptic";
 import Amount from "./Amount";
 import Sheet from "./Sheet";
 import TagChips from "./TagChips";
 import TypeToggle from "./TypeToggle";
 
 export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
-  const { tags, banks, transactions, updateTransaction, deleteTransaction } = useStore();
+  const { tags, banks, transactions, updateTransaction, deleteTransaction, addTransactions, showToast } = useStore();
   const [type, setType] = useState<TxType>(tx.type);
   const [tag, setTag] = useState<string | null>(tx.tag);
   // Selected pot as "label|monthKey", or null.
@@ -39,6 +40,7 @@ export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onC
       tagged: tag !== null,
       typeUncertain: false,
     });
+    haptic();
     onClose();
   }
 
@@ -89,10 +91,9 @@ export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onC
         type="button"
         className="danger-btn"
         onClick={() => {
-          if (confirm("حذف شود؟")) {
-            deleteTransaction(tx.id);
-            onClose();
-          }
+          deleteTransaction(tx.id);
+          showToast("تراکنش حذف شد", () => addTransactions([tx]));
+          onClose();
         }}
       >
         <Trash2 size={16} /> حذف

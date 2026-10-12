@@ -130,6 +130,13 @@ public class PersonalCostPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void setWidget(PluginCall call) {
+        CaptureStore.setWidget(ctx(), call.getData());
+        SpendWidget.refresh(ctx());
+        call.resolve();
+    }
+
+    @PluginMethod
     public void setUntaggedCount(PluginCall call) {
         CaptureStore.setUntaggedCount(ctx(), call.getInt("count", 0));
         call.resolve();

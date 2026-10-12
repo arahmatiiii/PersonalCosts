@@ -1,6 +1,31 @@
+import { formatToman, startOfDay } from "../lib/format";
+import { fundsForMonth } from "../lib/funds";
 import { ingestCaptures } from "../lib/ingest";
+import { monthOf, monthRange, MONTHS } from "../lib/jalali";
+import type { Transaction } from "../types";
 import { useStore } from "../store/useStore";
-import { isNative, PersonalCost } from "./personalCost";
+import { isNative, PersonalCost, type WidgetData } from "./personalCost";
+
+export function widgetData(transactions: Transaction[], now = new Date()): WidgetData {
+  const month = monthOf(now);
+  const [from, to] = monthRange(month);
+  const today = startOfDay(now).getTime();
+  let monthSpent = 0;
+  let todaySpent = 0;
+  for (const t of transactions) {
+    if (t.type !== "expense" || t.timestamp < from || t.timestamp > to) continue;
+    monthSpent += t.amount;
+    if (t.timestamp >= today) todaySpent += t.amount;
+  }
+  const funds = fundsForMonth(transactions, month);
+  return {
+    title: `خرج ${MONTHS[month.jm - 1]}`,
+    month: formatToman(monthSpent),
+    today: formatToman(todaySpent),
+    funds: funds.length ? formatToman(funds.reduce((s, f) => s + f.remaining, 0)) : "",
+    untagged: transactions.filter((t) => !t.tagged).length,
+  };
+}
 
 let draining = false;
 
@@ -29,6 +54,7 @@ export function startNativeBridge(): () => void {
   let lastSenders = "";
   let lastReminder = "";
   let lastCount = -1;
+  let lastWidget = "";
 
   const push = () => {
     const s = useStore.getState();
@@ -49,11 +75,22 @@ export function startNativeBridge(): () => void {
       lastCount = count;
       PersonalCost.setUntaggedCount({ count }).catch(console.warn);
     }
+    const widget = widgetData(s.transactions);
+    const wKey = JSON.stringify(widget);
+    if (wKey !== lastWidget) {
+      lastWidget = wKey;
+      PersonalCost.setWidget(widget).catch(console.warn);
+    }
   };
 
   push();
   const unsub = useStore.subscribe(push);
-  const onVisible = () => document.visibilityState === "visible" && drainCaptures();
+  // On resume: pull new SMS, and refresh the widget (e.g. "today" after midnight).
+  const onVisible = () => {
+    if (document.visibilityState !== "visible") return;
+    drainCaptures();
+    push();
+  };
   document.addEventListener("visibilitychange", onVisible);
   const listener = PersonalCost.addListener("capture", () => drainCaptures());
   drainCaptures();

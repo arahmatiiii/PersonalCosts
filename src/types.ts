@@ -42,12 +42,15 @@ export interface UserSettings {
   reminderHour: number;
   reminderMinute: number;
   reminderEnabled: boolean;
+  /** Annual inflation (%) used to show past amounts in today's money. */
+  inflationRate: number;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
   reminderHour: 22,
   reminderMinute: 0,
   reminderEnabled: true,
+  inflationRate: 40,
 };
 
 export const CASH_BANK_ID = "cash";

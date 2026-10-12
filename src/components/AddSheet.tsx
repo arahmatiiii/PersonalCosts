@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { startOfDay, tomanInputToRial } from "../lib/format";
+import { faNum, startOfDay, tomanInputToRial } from "../lib/format";
+import { haptic } from "../lib/haptic";
 import DatePicker from "./DatePicker";
 import { newId } from "../lib/id";
 import { useStore } from "../store/useStore";
@@ -9,7 +10,7 @@ import TagChips from "./TagChips";
 import TypeToggle from "./TypeToggle";
 
 export default function AddSheet({ onClose }: { onClose: () => void }) {
-  const { banks, tags, addTransactions } = useStore();
+  const { banks, tags, addTransactions, showToast } = useStore();
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<TxType>("expense");
   const [bankId, setBankId] = useState(CASH_BANK_ID);
@@ -42,6 +43,8 @@ export default function AddSheet({ onClose }: { onClose: () => void }) {
         createdAt: Date.now(),
       },
     ]);
+    haptic();
+    showToast(type === "expense" ? "هزینه ثبت شد" : "درآمد ثبت شد");
     onClose();
   }
 
@@ -50,7 +53,25 @@ export default function AddSheet({ onClose }: { onClose: () => void }) {
   return (
     <Sheet title="تراکنش جدید" onClose={onClose}>
       <form className="stack" style={{ gap: 16 }} onSubmit={submit}>
-        <input className="amount-input num" inputMode="numeric" placeholder="۰ تومان" autoFocus value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <div className="amount-field">
+          <input
+            className="amount-input num"
+            inputMode="numeric"
+            placeholder="۰"
+            autoFocus
+            value={rial ? faNum(rial / 10) : ""}
+            onChange={(e) => setAmount(e.target.value)}
+            aria-label="مبلغ به تومان"
+          />
+          <span className="amount-unit">تومان</span>
+        </div>
+        <div className="chips quick-amounts">
+          {[50_000, 100_000, 200_000, 500_000].map((v) => (
+            <button key={v} type="button" className="chip outline" onClick={() => setAmount(String((rial ?? 0) / 10 + v))}>
+              +{faNum(v / 1000)} هزار
+            </button>
+          ))}
+        </div>
         <TypeToggle value={type} onChange={setType} />
         {accounts.length > 1 && (
           <div className="chips">
