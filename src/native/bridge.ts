@@ -1,6 +1,6 @@
 import { formatToman, startOfDay } from "../lib/format";
 import { fundsForMonth } from "../lib/funds";
-import { ingestCaptures } from "../lib/ingest";
+import { readCaptures } from "../lib/ingest";
 import { monthOf, monthRange, MONTHS } from "../lib/jalali";
 import type { Transaction } from "../types";
 import { useStore } from "../store/useStore";
@@ -37,7 +37,9 @@ export async function drainCaptures(): Promise<void> {
     const { captures } = await PersonalCost.getCaptures();
     if (captures.length === 0) return;
     const s = useStore.getState();
-    s.addTransactions(ingestCaptures(captures, s.banks, s.transactions));
+    const { added, unread } = readCaptures(captures, s.banks, s.transactions);
+    s.addTransactions(added);
+    s.addUnread(unread);
     // Ack only after the (persisted) store has them, so nothing is lost on a crash.
     await PersonalCost.ackCaptures({ ids: captures.map((c) => c.id) });
   } catch (e) {
