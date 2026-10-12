@@ -32,25 +32,26 @@ export interface Bank {
   sender: string;
 }
 
+/** "expense" tags describe what an expense was; "fund" tags name a «پول» (an income pot). */
+export type TagKind = "expense" | "fund";
+
 export interface Tag {
   id: string;
   label: string;
   color: string;
+  kind: TagKind;
 }
 
 export interface UserSettings {
   reminderHour: number;
   reminderMinute: number;
   reminderEnabled: boolean;
-  /** Annual inflation (%) used to show past amounts in today's money. */
-  inflationRate: number;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
   reminderHour: 22,
   reminderMinute: 0,
   reminderEnabled: true,
-  inflationRate: 40,
 };
 
 export const CASH_BANK_ID = "cash";

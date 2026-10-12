@@ -1,20 +1,24 @@
-import { ChevronLeft, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { ChevronLeft, Sparkles, Wallet } from "lucide-react";
+import { useMemo, useState } from "react";
 import { formatRelative } from "../lib/format";
+import { fundDisplay, fundOptionsFor } from "../lib/funds";
+import { haptic } from "../lib/haptic";
 import { useStore } from "../store/useStore";
 import type { Transaction } from "../types";
-import { haptic } from "../lib/haptic";
 import Amount from "./Amount";
 import TagChips from "./TagChips";
 
-/** One untagged transaction at a time: «این چی بود؟» + one-tap tags. */
+/** One untagged transaction at a time: «این چی بود؟», which «پول» paid (expenses), then one-tap tag. */
 export default function ReviewCard({ items }: { items: Transaction[] }) {
-  const { tags, banks, tagTransaction, updateTransaction, showToast } = useStore();
+  const { tags, banks, transactions, tagTransaction, updateTransaction, showToast } = useStore();
   const [skip, setSkip] = useState(0);
-  if (items.length === 0) return null;
+  const [fund, setFund] = useState<string | null>(null); // "label|monthKey"
+  const tx = items.length ? items[skip % items.length] : undefined;
+  const funds = useMemo(() => (tx?.type === "expense" ? fundOptionsFor(tx, transactions) : []), [tx, transactions]);
+  if (!tx) return null;
   const i = skip % items.length;
-  const tx = items[i];
   const bank = tx.bankId === "cash" ? "نقدی" : (banks.find((b) => b.id === tx.bankId)?.name ?? "بانک");
+  const kindTags = tags.filter((t) => t.kind === (tx.type === "income" ? "fund" : "expense"));
 
   return (
     <div className="card review" key={tx.id}>
@@ -25,7 +29,15 @@ export default function ReviewCard({ items }: { items: Transaction[] }) {
           {(i + 1).toLocaleString("fa-IR")} / {items.length.toLocaleString("fa-IR")}
         </span>
         {items.length > 1 && (
-          <button type="button" className="icon-btn" aria-label="بعدی" onClick={() => setSkip((s) => s + 1)}>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="بعدی"
+            onClick={() => {
+              setSkip((s) => s + 1);
+              setFund(null);
+            }}
+          >
             <ChevronLeft size={20} />
           </button>
         )}
@@ -36,13 +48,37 @@ export default function ReviewCard({ items }: { items: Transaction[] }) {
           {bank} · {formatRelative(new Date(tx.timestamp))}
         </span>
       </div>
-      <TagChips tags={tags} value={null} scroll onPick={(label) => {
+      {funds.length > 0 && (
+        <div className="fund-pick">
+          <span className="fund-pick-label">
+            <Wallet size={16} /> از
+          </span>
+          <div className="chips scroll">
+            {funds.map((f) => {
+              const id = `${f.label}|${f.key}`;
+              return (
+                <button key={id} type="button" className={`chip outline${fund === id ? " on" : ""}`} onClick={() => setFund((cur) => (cur === id ? null : id))}>
+                  {fundDisplay(f.label, f.key, tx.timestamp)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <TagChips
+        tags={kindTags}
+        value={null}
+        scroll
+        onPick={(label) => {
           haptic();
-          tagTransaction(tx.id, label);
-          const { id, fund = null, fundMonth = null, ...before } = tx;
-          showToast(`«${label}» ثبت شد`, () => updateTransaction(id, { ...before, fund, fundMonth }));
+          const [f, fm] = fund ? fund.split("|") : [null, null];
+          tagTransaction(tx.id, label, tx.type === "expense" ? { fund: f, fundMonth: fm } : undefined);
+          setFund(null);
+          const { id, fund: oldFund = null, fundMonth: oldFundMonth = null, ...before } = tx;
+          showToast(`«${label}» ثبت شد`, () => updateTransaction(id, { ...before, fund: oldFund, fundMonth: oldFundMonth }));
         }}
       />
+      {kindTags.length === 0 && <span className="muted small">در تنظیمات یک {tx.type === "income" ? "تگ پول" : "تگ هزینه"} بساز.</span>}
     </div>
   );
 }

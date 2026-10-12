@@ -1,8 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { autoFund } from "../lib/funds";
 import { newId } from "../lib/id";
-import { DEFAULT_SETTINGS, TAG_COLORS, type Bank, type Tag, type Transaction, type UserSettings } from "../types";
+import { DEFAULT_SETTINGS, TAG_COLORS, type Bank, type Tag, type TagKind, type Transaction, type UserSettings } from "../types";
 
 export type TabId = "home" | "history" | "stats" | "settings";
 
@@ -24,14 +23,14 @@ export interface AppState {
 
   addTransactions: (txs: Transaction[]) => void;
   updateTransaction: (id: string, patch: Partial<Omit<Transaction, "id">>) => void;
-  /** Tag a transaction; an expense whose tag matches a «پول» that month is paid from it. */
-  tagTransaction: (id: string, tag: string) => void;
+  /** Tag a transaction; an expense can also say which «پول» paid for it. */
+  tagTransaction: (id: string, tag: string, fund?: Pick<Transaction, "fund" | "fundMonth">) => void;
   deleteTransaction: (id: string) => void;
 
   addBank: (name: string, sender: string) => void;
   deleteBank: (id: string) => void;
 
-  addTag: (label: string) => void;
+  addTag: (label: string, kind: TagKind) => void;
   deleteTag: (id: string) => void;
 
   saveSettings: (patch: Partial<UserSettings>) => void;
@@ -41,7 +40,7 @@ export interface AppState {
 }
 
 export interface BackupData {
-  version: 2;
+  version: 2 | 3;
   transactions: Transaction[];
   banks: Bank[];
   tags: Tag[];
@@ -49,8 +48,9 @@ export interface BackupData {
 }
 
 const defaultTags = (): Tag[] => [
-  { id: newId(), label: "اسنپ", color: TAG_COLORS[0] },
-  { id: newId(), label: "شارژ", color: TAG_COLORS[1] },
+  { id: newId(), label: "اسنپ", color: TAG_COLORS[0], kind: "expense" },
+  { id: newId(), label: "شارژ", color: TAG_COLORS[1], kind: "expense" },
+  { id: newId(), label: "حقوق", color: TAG_COLORS[2], kind: "fund" },
 ];
 
 function nextColor(tags: Tag[]): string {
@@ -69,14 +69,33 @@ export function migrate(persisted: unknown, version: number): unknown {
     const oldTags = (s.tags as { id: string; label: string; color: string }[] | undefined) ?? [];
     const oldPreset = ["خوراک", "رفت‌وآمد", "خرید خانه", "قبوض", "تفریح", "سلامت", "حقوق", "سایر"];
     const untouched = oldTags.length === oldPreset.length && oldTags.every((t) => oldPreset.includes(t.label));
-    s.tags = untouched ? defaultTags() : oldTags.map(({ id, label, color }) => ({ id, label, color }));
+    s.tags = untouched ? defaultTags().filter((t) => t.kind === "expense") : oldTags.map(({ id, label, color }) => ({ id, label, color }));
     s.transactions = ((s.transactions as Transaction[] | undefined) ?? []).map((t) =>
       (t.source as string) === "notification" ? { ...t, source: "sms" } : t,
     );
     delete s.debugLog;
     delete s.captureAll;
   }
+  if (version < 3) s.tags = splitTagKinds((s.tags as Tag[] | undefined) ?? [], (s.transactions as Transaction[] | undefined) ?? []);
   return s;
+}
+
+/**
+ * v2 → v3: tags get a kind. A tag used on incomes becomes a «پول» tag, otherwise an expense tag; a
+ * tag used on both is kept as one of each.
+ */
+export function splitTagKinds(tags: Omit<Tag, "kind">[], transactions: Transaction[]): Tag[] {
+  const onIncome = new Set(transactions.filter((t) => t.type === "income" && t.tag).map((t) => t.tag));
+  const onExpense = new Set(transactions.filter((t) => t.type === "expense" && t.tag).map((t) => t.tag));
+  return tags.flatMap((t): Tag[] => {
+    const base = { id: t.id, label: t.label, color: t.color };
+    if (!onIncome.has(t.label)) return [{ ...base, kind: "expense" }];
+    if (!onExpense.has(t.label)) return [{ ...base, kind: "fund" }];
+    return [
+      { ...base, kind: "expense" },
+      { ...base, id: `${t.id}-fund`, kind: "fund" },
+    ];
+  });
 }
 
 export const useStore = create<AppState>()(
@@ -96,28 +115,32 @@ export const useStore = create<AppState>()(
       },
       updateTransaction: (id, patch) =>
         set((s) => ({ transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
-      tagTransaction: (id, tag) =>
+      tagTransaction: (id, tag, fund) =>
         set((s) => ({
-          transactions: s.transactions.map((t) =>
-            t.id === id ? { ...t, tag, tagged: true, typeUncertain: false, ...autoFund(t, tag, s.transactions) } : t,
-          ),
+          transactions: s.transactions.map((t) => (t.id === id ? { ...t, tag, tagged: true, typeUncertain: false, ...fund } : t)),
         })),
       deleteTransaction: (id) => set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
 
       addBank: (name, sender) => set((s) => ({ banks: [...s.banks, { id: newId(), name, sender }] })),
       deleteBank: (id) => set((s) => ({ banks: s.banks.filter((b) => b.id !== id) })),
 
-      addTag: (label) => set((s) => ({ tags: [...s.tags, { id: newId(), label, color: nextColor(s.tags) }] })),
+      addTag: (label, kind) => set((s) => ({ tags: [...s.tags, { id: newId(), label, color: nextColor(s.tags), kind }] })),
       deleteTag: (id) => set((s) => ({ tags: s.tags.filter((t) => t.id !== id) })),
 
       saveSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
-      importBackup: (d) => set({ transactions: d.transactions, banks: d.banks, tags: d.tags, settings: { ...DEFAULT_SETTINGS, ...d.settings } }),
+      importBackup: (d) =>
+        set({
+          transactions: d.transactions,
+          banks: d.banks,
+          tags: d.version === 3 ? d.tags : splitTagKinds(d.tags, d.transactions),
+          settings: { ...DEFAULT_SETTINGS, ...d.settings },
+        }),
       showToast: (text, undo) => set({ toast: { id: Date.now(), text, undo } }),
       hideToast: () => set({ toast: null }),
     }),
     {
       name: "personalcost-store",
-      version: 2,
+      version: 3,
       migrate: (p, v) => migrate(p, v) as AppState,
       merge: (persisted, current) => {
         const p = persisted as Partial<AppState>;
@@ -135,5 +158,5 @@ export const useStore = create<AppState>()(
 );
 
 export function makeBackup(s: AppState): BackupData {
-  return { version: 2, transactions: s.transactions, banks: s.banks, tags: s.tags, settings: s.settings };
+  return { version: 3, transactions: s.transactions, banks: s.banks, tags: s.tags, settings: s.settings };
 }

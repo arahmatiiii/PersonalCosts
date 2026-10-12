@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { splitTagKinds } from "../store/useStore";
 import type { Transaction } from "../types";
 import { fromJalali } from "./jalali";
-import { change, fundDetail, inTodaysMoney, monthlyTotals, unfundedExpenses, yearSummary } from "./stats";
+import { fundInRange, fundsInRange, unfundedExpenses } from "./stats";
 
 let n = 0;
 const tx = (over: Partial<Transaction>): Transaction => ({
@@ -20,59 +21,51 @@ const tx = (over: Partial<Transaction>): Transaction => ({
   ...over,
 });
 const at = (jm: number, jd: number, h = 12) => fromJalali(1405, jm, jd).getTime() + h * 3_600_000;
-const mehr = { jy: 1405, jm: 7 };
+const day = (jm: number, jd: number) => fromJalali(1405, jm, jd).getTime();
 
-describe("fundDetail", () => {
-  const data = [
-    tx({ type: "income", tag: "حقوق", amount: 30_000, timestamp: at(7, 1) }),
-    tx({ amount: 5_000, tag: "خوراک", fund: "حقوق", fundMonth: "1405-7", timestamp: at(7, 3) }),
-    tx({ amount: 2_000, tag: "اسنپ", fund: "حقوق", fundMonth: "1405-7", timestamp: at(7, 5) }),
-    // paid from Mehr's pot although dated in Shahrivar
-    tx({ amount: 1_000, tag: "خوراک", fund: "حقوق", fundMonth: "1405-7", timestamp: at(6, 30) }),
-    tx({ amount: 9_999, tag: "خوراک", timestamp: at(7, 6) }),
-  ];
+const data = [
+  tx({ type: "income", tag: "حقوق", amount: 30_000, timestamp: at(6, 1) }),
+  tx({ type: "income", tag: "حقوق", amount: 31_000, timestamp: at(7, 1) }),
+  tx({ amount: 5_000, tag: "خوراک", fund: "حقوق", fundMonth: "1405-7", timestamp: at(7, 3) }),
+  tx({ amount: 2_000, tag: "اسنپ", fund: "حقوق", fundMonth: "1405-7", timestamp: at(7, 5) }),
+  tx({ amount: 1_000, tag: "خوراک", fund: "حقوق", fundMonth: "1405-7", timestamp: at(6, 30) }),
+  tx({ amount: 4_000, tag: "خرید", fund: "پروژه", fundMonth: "1405-6", timestamp: at(6, 20) }),
+  tx({ amount: 9_999, tag: "خوراک", timestamp: at(7, 6) }),
+];
 
-  it("collects the pot's incomes and expenses and its balance over time", () => {
-    const d = fundDetail(data, "حقوق", mehr, at(7, 10))!;
-    expect(d.fund).toMatchObject({ total: 30_000, spent: 8_000, remaining: 22_000 });
+describe("pots over any range", () => {
+  it("sums what came in and went out of each pot inside the range", () => {
+    // 25 Shahrivar → 10 Mehr
+    const r = fundsInRange(data, day(6, 25), day(7, 10) - 1);
+    expect(r).toEqual([{ label: "حقوق", income: 31_000, spent: 8_000 }]);
+    // the whole of Shahrivar + Mehr: two salaries, plus the «پروژه» pot that only had spending
+    const all = fundsInRange(data, day(6, 1), day(8, 1) - 1);
+    expect(all.find((f) => f.label === "حقوق")).toMatchObject({ income: 61_000, spent: 8_000 });
+    expect(all.find((f) => f.label === "پروژه")).toMatchObject({ income: 0, spent: 4_000 });
+  });
+
+  it("details one pot: entries, newest-first expenses, running balance and pace", () => {
+    const d = fundInRange(data, "حقوق", day(6, 25), day(7, 10) - 1, at(7, 6));
     expect(d.expenses.map((e) => e.amount)).toEqual([2_000, 5_000, 1_000]);
-    expect(d.burn.map((b) => b.remaining)).toEqual([-1_000, 29_000, 24_000, 22_000]);
+    expect(d.flow.map((f) => f.balance)).toEqual([-1_000, 30_000, 25_000, 23_000]);
+    expect(d.daysLeft).toBeGreaterThan(0);
+    expect(fundInRange(data, "حقوق", day(6, 25), day(7, 10) - 1, at(8, 1)).daysLeft).toBe(0);
   });
 
-  it("projects when a current-month pot runs out", () => {
-    const d = fundDetail(data, "حقوق", mehr, at(7, 2))!;
-    expect(d.runsOutAt).not.toBeNull();
-    expect(fundDetail(data, "حقوق", mehr, at(7, 29))!.runsOutAt).toBeNull();
-  });
-
-  it("returns null for an unknown pot and lists unfunded expenses", () => {
-    expect(fundDetail(data, "نیست", mehr)).toBeNull();
-    expect(unfundedExpenses(data, mehr).map((t) => t.amount)).toEqual([9_999]);
+  it("lists unfunded expenses in the range", () => {
+    expect(unfundedExpenses(data, day(7, 1), day(8, 1) - 1).map((t) => t.amount)).toEqual([9_999]);
   });
 });
 
-describe("trends and inflation", () => {
-  it("totals months oldest first", () => {
-    const t = monthlyTotals([tx({ timestamp: at(6, 2), amount: 7 }), tx({ timestamp: at(7, 2), amount: 3, type: "income" })], mehr, 3);
-    expect(t.map((m) => [m.month.jm, m.expense, m.income])).toEqual([
-      [5, 0, 0],
-      [6, 7, 0],
-      [7, 0, 3],
-    ]);
-  });
-
-  it("brings old amounts to today's money", () => {
-    expect(inTodaysMoney(100, 12, 40)).toBeCloseTo(140);
-    const c = change(140, 100, 12, 40)!;
-    expect(c.nominal).toBeCloseTo(0.4);
-    expect(c.real).toBeCloseTo(0);
-    expect(change(1, 0, 1, 40)).toBeNull();
-  });
-
-  it("summarises a Jalali year", () => {
-    const s = yearSummary([tx({ timestamp: at(2, 1), amount: 50, tag: "خرید" }), tx({ timestamp: at(3, 1), amount: 10, tag: "خوراک" })], 1405, []);
-    expect(s).toMatchObject({ expense: 60, count: 2 });
-    expect(s.topTag?.label).toBe("خرید");
-    expect(s.topMonth?.month.jm).toBe(2);
+describe("splitTagKinds", () => {
+  it("makes income tags «پول» tags and keeps a tag used on both as one of each", () => {
+    const tags = [
+      { id: "a", label: "حقوق", color: "#1" },
+      { id: "b", label: "خوراک", color: "#2" },
+      { id: "c", label: "هدیه", color: "#3" },
+      { id: "d", label: "نو", color: "#4" },
+    ];
+    const txs = [tx({ type: "income", tag: "حقوق" }), tx({ tag: "خوراک" }), tx({ type: "income", tag: "هدیه" }), tx({ tag: "هدیه" })];
+    expect(splitTagKinds(tags, txs).map((t) => `${t.label}:${t.kind}`)).toEqual(["حقوق:fund", "خوراک:expense", "هدیه:expense", "هدیه:fund", "نو:expense"]);
   });
 });
