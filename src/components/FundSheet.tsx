@@ -2,6 +2,7 @@ import { ArrowDownLeft, CalendarClock, CircleDollarSign, Gauge, TrendingDown, Wa
 import { useMemo, useState } from "react";
 import { faNum, rialToToman } from "../lib/format";
 import { fundInRange, tagBreakdown, UNTAGGED, unfundedExpenses } from "../lib/stats";
+import type { JMonth } from "../lib/jalali";
 import { useStore } from "../store/useStore";
 import Amount from "./Amount";
 import { Donut, FlowChart, SliceList } from "./Charts";
@@ -15,17 +16,19 @@ interface Props {
   from: number;
   to: number;
   rangeLabel: string;
+  /** Set when the period is one month: the sheet then shows that month's pot exactly like the Home cards. */
+  potMonth?: JMonth;
   onClose: () => void;
 }
 
 /** One «پول» over a date range: what came in, what was paid from it, where it went and every expense. */
-export default function FundSheet({ label, from, to, rangeLabel, onClose }: Props) {
+export default function FundSheet({ label, from, to, rangeLabel, potMonth, onClose }: Props) {
   const { transactions, tags, banks } = useStore();
   const [selTags, setSelTags] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const bankById = useMemo(() => new Map(banks.map((b) => [b.id, b])), [banks]);
 
-  const detail = useMemo(() => (label ? fundInRange(transactions, label, from, to) : null), [transactions, label, from, to]);
+  const detail = useMemo(() => (label ? fundInRange(transactions, label, from, to, potMonth) : null), [transactions, label, from, to, potMonth]);
   const expenses = useMemo(() => detail?.expenses ?? unfundedExpenses(transactions, from, to), [detail, transactions, from, to]);
   const slices = useMemo(() => tagBreakdown(expenses, tags), [expenses, tags]);
   const shown = selTags.length ? expenses.filter((t) => selTags.includes(t.tag ?? UNTAGGED)) : expenses;

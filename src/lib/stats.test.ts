@@ -45,11 +45,21 @@ describe("pots over any range", () => {
   });
 
   it("details one pot: entries, newest-first expenses, running balance and pace", () => {
-    const d = fundInRange(data, "حقوق", day(6, 25), day(7, 10) - 1, at(7, 6));
+    const d = fundInRange(data, "حقوق", day(6, 25), day(7, 10) - 1, undefined, at(7, 6));
     expect(d.expenses.map((e) => e.amount)).toEqual([2_000, 5_000, 1_000]);
     expect(d.flow.map((f) => f.balance)).toEqual([-1_000, 30_000, 25_000, 23_000]);
     expect(d.daysLeft).toBeGreaterThan(0);
-    expect(fundInRange(data, "حقوق", day(6, 25), day(7, 10) - 1, at(8, 1)).daysLeft).toBe(0);
+    expect(fundInRange(data, "حقوق", day(6, 25), day(7, 10) - 1, undefined, at(8, 1)).daysLeft).toBe(0);
+  });
+
+  it("for a month, counts the month's pot like the Home cards (by fundMonth, not by date)", () => {
+    const mehr = { jy: 1405, jm: 7 };
+    const [from, to] = [day(7, 1), day(8, 1) - 1];
+    // the 30-Shahrivar buy was paid from Mehr's pot, so it counts for Mehr
+    expect(fundsInRange(data, from, to, mehr).find((f) => f.label === "حقوق")).toMatchObject({ income: 31_000, spent: 8_000 });
+    expect(fundInRange(data, "حقوق", from, to, mehr).expenses).toHaveLength(3);
+    // and the «پروژه» buy, dated in Shahrivar from Shahrivar's pot, doesn't
+    expect(fundsInRange(data, from, to, mehr).some((f) => f.label === "پروژه")).toBe(false);
   });
 
   it("lists unfunded expenses in the range", () => {

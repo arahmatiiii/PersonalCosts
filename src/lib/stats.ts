@@ -1,6 +1,7 @@
 import type { Tag, Transaction } from "../types";
 import { startOfDay } from "./format";
-import { addMonths, monthOf, monthRange } from "./jalali";
+import { fundMonthOf } from "./funds";
+import { addMonths, monthKey, monthOf, monthRange, type JMonth } from "./jalali";
 
 const DAY = 86_400_000;
 export const UNTAGGED = "بدون تگ";
@@ -31,16 +32,21 @@ export interface RangeFund {
 }
 
 /**
- * What happened to each «پول» in [from, to]: incomes with that tag dated in the range, and expenses
- * paid from it dated in the range (whichever month's pot they were paid from).
+ * Whether expense `t` counts against a pot for this period. For a month (`potMonth`) that's the
+ * month's pot itself — expenses paid from it whatever their own date, like the Home cards; for any
+ * other range it's expenses dated inside the range.
  */
-export function fundsInRange(transactions: Transaction[], from: number, to: number): RangeFund[] {
+function paidInPeriod(t: Transaction, from: number, to: number, potMonth?: JMonth): boolean {
+  return potMonth ? fundMonthOf(t) === monthKey(potMonth) : t.timestamp >= from && t.timestamp <= to;
+}
+
+/** What happened to each «پول» in the period: incomes with that tag dated in it, and expenses paid from it. */
+export function fundsInRange(transactions: Transaction[], from: number, to: number, potMonth?: JMonth): RangeFund[] {
   const m = new Map<string, RangeFund>();
   const get = (label: string) => m.get(label) ?? m.set(label, { label, income: 0, spent: 0 }).get(label)!;
   for (const t of transactions) {
-    if (t.timestamp < from || t.timestamp > to) continue;
-    if (t.type === "income" && t.tag) get(t.tag).income += t.amount;
-    else if (t.type === "expense" && t.fund) get(t.fund).spent += t.amount;
+    if (t.type === "income" && t.tag && t.timestamp >= from && t.timestamp <= to) get(t.tag).income += t.amount;
+    else if (t.type === "expense" && t.fund && paidInPeriod(t, from, to, potMonth)) get(t.fund).spent += t.amount;
   }
   return [...m.values()].sort((a, b) => b.income + b.spent - (a.income + a.spent));
 }
@@ -55,10 +61,9 @@ export interface RangeFundDetail extends RangeFund {
   daysLeft: number;
 }
 
-export function fundInRange(transactions: Transaction[], label: string, from: number, to: number, now = Date.now()): RangeFundDetail {
-  const inRange = transactions.filter((t) => t.timestamp >= from && t.timestamp <= to);
-  const incomes = inRange.filter((t) => t.type === "income" && t.tag === label).sort((a, b) => b.timestamp - a.timestamp);
-  const expenses = inRange.filter((t) => t.type === "expense" && t.fund === label).sort((a, b) => b.timestamp - a.timestamp);
+export function fundInRange(transactions: Transaction[], label: string, from: number, to: number, potMonth?: JMonth, now = Date.now()): RangeFundDetail {
+  const incomes = transactions.filter((t) => t.type === "income" && t.tag === label && t.timestamp >= from && t.timestamp <= to).sort((a, b) => b.timestamp - a.timestamp);
+  const expenses = transactions.filter((t) => t.type === "expense" && t.fund === label && paidInPeriod(t, from, to, potMonth)).sort((a, b) => b.timestamp - a.timestamp);
   const events = [...incomes.map((t) => ({ t: t.timestamp, d: t.amount })), ...expenses.map((t) => ({ t: t.timestamp, d: -t.amount }))].sort((a, b) => a.t - b.t);
   let balance = 0;
   const flow = events.map((e) => ({ t: e.t, balance: (balance += e.d) }));
