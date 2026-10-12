@@ -114,6 +114,7 @@ public final class CaptureStore {
             if (o != null && !ids.contains(o.optString("id"))) kept.put(o);
         }
         prefs(c).edit().putString(KEY_QUEUE, kept.toString()).commit();
+        SpendWidget.refresh(c);
     }
 
     public static synchronized int pending(Context c) {

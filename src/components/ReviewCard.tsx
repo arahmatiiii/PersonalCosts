@@ -39,8 +39,8 @@ export default function ReviewCard({ items }: { items: Transaction[] }) {
       <TagChips tags={tags} value={null} scroll onPick={(label) => {
           haptic();
           tagTransaction(tx.id, label);
-          const { id, ...before } = tx;
-          showToast(`«${label}» ثبت شد`, () => updateTransaction(id, before));
+          const { id, fund = null, fundMonth = null, ...before } = tx;
+          showToast(`«${label}» ثبت شد`, () => updateTransaction(id, { ...before, fund, fundMonth }));
         }}
       />
     </div>
