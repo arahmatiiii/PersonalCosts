@@ -1,5 +1,7 @@
-import { Check, Download, Plus, ShieldCheck, Upload, X } from "lucide-react";
+import { Check, Download, GraduationCap, Plus, ShieldCheck, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { faNum } from "../lib/format";
+import TeachSheet from "./TeachSheet";
 import { isNative, PersonalCost, type CaptureStatus } from "../native/personalCost";
 import { makeBackup, useStore, type BackupData } from "../store/useStore";
 import type { TagKind } from "../types";
@@ -49,6 +51,7 @@ function Banks() {
   const { banks, addBank, deleteBank } = useStore();
   const [name, setName] = useState("");
   const [sender, setSender] = useState("");
+  const [teaching, setTeaching] = useState<string | null>(null);
 
   function add(e: React.FormEvent) {
     e.preventDefault();
@@ -69,6 +72,10 @@ function Banks() {
               {b.sender}
             </div>
           </div>
+          <button type="button" className="chip outline teach-chip" onClick={() => setTeaching(b.id)}>
+            <GraduationCap size={15} />
+            {b.rules?.length ? `${faNum(b.rules.length)} الگو` : "آموزش پیامک"}
+          </button>
           <button type="button" className="icon-btn" aria-label="حذف" onClick={() => confirm(`«${b.name}» حذف شود؟`) && deleteBank(b.id)}>
             <X size={18} />
           </button>
@@ -81,6 +88,8 @@ function Banks() {
           <Plus size={20} />
         </button>
       </form>
+      {banks.length > 0 && <div className="muted small bank-hint">اگر پیامک بانکی درست خوانده نمی‌شود، «آموزش پیامک» را بزن و یک نمونه‌اش را بگذار.</div>}
+      {teaching && <TeachSheet bankId={teaching} onClose={() => setTeaching(null)} />}
     </>
   );
 }

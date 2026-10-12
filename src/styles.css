@@ -451,3 +451,20 @@ button.card:active { transform: scale(.985); }
 .funds .fund { width: 230px; }
 .funds .fund:only-child { width: 100%; }
 .range-days { align-self: flex-end; }
+
+/* ---------- v6: teaching SMS rules ---------- */
+.teach-chip { height: 30px; font-size: 0.78rem; padding: 0 10px; }
+.bank-hint { padding: 0 16px 14px; }
+.sms-input { width: 100%; min-height: 110px; padding: 12px 14px; border-radius: 14px; border: 1px solid transparent; background: var(--soft); font: inherit; color: inherit; resize: vertical; outline: none; }
+.sms-input:focus { border-color: var(--primary); background: var(--card); }
+.sms-preview { white-space: pre-wrap; line-height: 2.2; background: var(--soft); border-radius: 14px; padding: 12px 14px; font-size: 0.9rem; }
+.sms-num { display: inline-block; padding: 0 8px; margin: 0 1px; border-radius: 8px; line-height: 1.7; background: var(--card); border: 1.5px dashed var(--line); font-weight: 600; direction: ltr; unicode-bidi: isolate; }
+.sms-num.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.teach-result { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--primary-soft); }
+.teach-amount { font-size: 1.4rem; font-weight: 700; }
+.rule-sample { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.unread-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1.5px solid var(--warn-soft); }
+.unread-card b, .unread-card .small { display: block; }
+.onboard-icon.warn { background: var(--warn-soft); color: var(--warn); }
+.unread-item { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.unread-item .raw { background: var(--card); }

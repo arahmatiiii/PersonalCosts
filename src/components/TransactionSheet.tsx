@@ -7,6 +7,7 @@ import { haptic } from "../lib/haptic";
 import Amount from "./Amount";
 import Sheet from "./Sheet";
 import TagChips from "./TagChips";
+import TeachSheet from "./TeachSheet";
 import TypeToggle from "./TypeToggle";
 
 export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
@@ -16,6 +17,7 @@ export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onC
   // Selected pot as "label|monthKey", or null.
   const [fund, setFund] = useState<string | null>(tx.fund ? `${tx.fund}|${fundMonthOf(tx)}` : null);
   const [note, setNote] = useState(tx.note ?? "");
+  const [teaching, setTeaching] = useState(false);
   const bank = tx.bankId === "cash" ? "نقدی" : (banks.find((b) => b.id === tx.bankId)?.name ?? "بانک");
   const funds = useMemo(() => fundOptionsFor(tx, transactions.filter((t) => t.id !== tx.id)), [tx, transactions]);
 
@@ -80,6 +82,12 @@ export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onC
       )}
       <input placeholder="یادداشت" value={note} onChange={(e) => setNote(e.target.value)} />
       {tx.rawText && <pre className="raw">{tx.rawText}</pre>}
+      {tx.source === "sms" && tx.rawText && banks.some((b) => b.id === tx.bankId) && (
+        <button type="button" className="link-btn" onClick={() => setTeaching(true)}>
+          مبلغ یا نوع اشتباه خوانده شده؟ آموزش بده
+        </button>
+      )}
+      {teaching && <TeachSheet bankId={tx.bankId} text={tx.rawText} txId={tx.id} onClose={() => setTeaching(false)} />}
       <button type="button" className="btn btn-primary btn-block" onClick={save}>
         ذخیره
       </button>

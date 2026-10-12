@@ -1,4 +1,4 @@
-import { ChevronLeft, Landmark, PenLine, Plus, TrendingDown, TrendingUp } from "lucide-react";
+import { ChevronLeft, Landmark, MessageSquareWarning, PenLine, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { faNum, rialToToman, startOfDay } from "../lib/format";
 import { fundsForMonth } from "../lib/funds";
@@ -10,6 +10,7 @@ import Amount from "./Amount";
 import FundCards from "./FundCards";
 import FundSheet from "./FundSheet";
 import ReviewCard from "./ReviewCard";
+import UnreadSheet from "./UnreadSheet";
 import TransactionRow from "./TransactionRow";
 import TransactionSheet from "./TransactionSheet";
 import WeekBars from "./WeekBars";
@@ -21,6 +22,8 @@ export default function HomePage() {
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openFund, setOpenFund] = useState<string | null>(null);
+  const [showUnread, setShowUnread] = useState(false);
+  const unreadCount = useStore((s) => s.unread.length);
 
   const now = new Date();
   const month = monthOf(now);
@@ -88,6 +91,19 @@ export default function HomePage() {
         </div>
         <WeekBars transactions={transactions} />
       </div>
+
+      {unreadCount > 0 && (
+        <button type="button" className="card unread-card" onClick={() => setShowUnread(true)}>
+          <span className="onboard-icon warn">
+            <MessageSquareWarning size={18} />
+          </span>
+          <span className="grow">
+            <b>{faNum(unreadCount)} پیامک بانکی خوانده نشد</b>
+            <span className="muted small">یک بار نشانش بده تا پیامک‌های مشابه خودکار ثبت شوند</span>
+          </span>
+          <ChevronLeft size={18} className="muted" />
+        </button>
+      )}
 
       <ReviewCard items={untagged} />
 
@@ -166,6 +182,7 @@ export default function HomePage() {
       </button>
       {adding && <AddSheet onClose={() => setAdding(false)} />}
       {open && <TransactionSheet key={open.id} tx={open} onClose={() => setOpenId(null)} />}
+      {showUnread && <UnreadSheet onClose={() => setShowUnread(false)} />}
       {openFund && <FundSheet label={openFund} from={mFrom} to={monthRange(month)[1]} rangeLabel={monthLabel(month)} potMonth={month} onClose={() => setOpenFund(null)} />}
     </>
   );

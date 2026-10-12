@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { newId } from "../lib/id";
-import { DEFAULT_SETTINGS, TAG_COLORS, type Bank, type Tag, type TagKind, type Transaction, type UserSettings } from "../types";
+import { DEFAULT_SETTINGS, TAG_COLORS, type Bank, type SmsRule, type Tag, type TagKind, type Transaction, type UnreadSms, type UserSettings } from "../types";
 
 export type TabId = "home" | "history" | "stats" | "settings";
 
@@ -17,6 +17,8 @@ export interface AppState {
   banks: Bank[];
   tags: Tag[];
   settings: UserSettings;
+  /** SMS from known banks that couldn't be read yet (newest first). */
+  unread: UnreadSms[];
   toast: Toast | null;
 
   setActiveTab: (t: TabId) => void;
@@ -29,6 +31,11 @@ export interface AppState {
 
   addBank: (name: string, sender: string) => void;
   deleteBank: (id: string) => void;
+  addBankRule: (bankId: string, rule: SmsRule) => void;
+  deleteBankRule: (bankId: string, ruleId: string) => void;
+
+  addUnread: (items: UnreadSms[]) => void;
+  removeUnread: (ids: string[]) => void;
 
   addTag: (label: string, kind: TagKind) => void;
   deleteTag: (id: string) => void;
@@ -106,6 +113,7 @@ export const useStore = create<AppState>()(
       banks: [],
       tags: defaultTags(),
       settings: DEFAULT_SETTINGS,
+      unread: [],
       toast: null,
 
       setActiveTab: (activeTab) => set({ activeTab }),
@@ -122,7 +130,18 @@ export const useStore = create<AppState>()(
       deleteTransaction: (id) => set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
 
       addBank: (name, sender) => set((s) => ({ banks: [...s.banks, { id: newId(), name, sender }] })),
-      deleteBank: (id) => set((s) => ({ banks: s.banks.filter((b) => b.id !== id) })),
+      deleteBank: (id) => set((s) => ({ banks: s.banks.filter((b) => b.id !== id), unread: s.unread.filter((u) => u.bankId !== id) })),
+      addBankRule: (bankId, rule) => set((s) => ({ banks: s.banks.map((b) => (b.id === bankId ? { ...b, rules: [rule, ...(b.rules ?? [])] } : b)) })),
+      deleteBankRule: (bankId, ruleId) =>
+        set((s) => ({ banks: s.banks.map((b) => (b.id === bankId ? { ...b, rules: (b.rules ?? []).filter((r) => r.id !== ruleId) } : b)) })),
+
+      addUnread: (items) =>
+        set((s) => {
+          const known = new Set(s.unread.map((u) => u.id));
+          const fresh = items.filter((u) => !known.has(u.id));
+          return fresh.length ? { unread: [...fresh.reverse(), ...s.unread].slice(0, 100) } : {};
+        }),
+      removeUnread: (ids) => set((s) => ({ unread: s.unread.filter((u) => !ids.includes(u.id)) })),
 
       addTag: (label, kind) => set((s) => ({ tags: [...s.tags, { id: newId(), label, color: nextColor(s.tags), kind }] })),
       deleteTag: (id) => set((s) => ({ tags: s.tags.filter((t) => t.id !== id) })),
@@ -152,6 +171,7 @@ export const useStore = create<AppState>()(
         banks: s.banks,
         tags: s.tags,
         settings: s.settings,
+        unread: s.unread,
       }),
     },
   ),
