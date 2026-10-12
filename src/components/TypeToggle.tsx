@@ -7,7 +7,7 @@ export default function TypeToggle({ value, onChange }: { value: TxType; onChang
         هزینه
       </button>
       <button type="button" className={value === "income" ? "on income" : ""} onClick={() => onChange("income")}>
-        پول
+        درآمد
       </button>
     </div>
   );

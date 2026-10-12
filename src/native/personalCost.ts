@@ -11,6 +11,14 @@ export interface CaptureStatus {
   batteryOptimizationIgnored: boolean;
 }
 
+export interface WidgetData {
+  title: string;
+  month: string;
+  today: string;
+  funds: string; // empty: no «پول» this month
+  untagged: number;
+}
+
 interface PersonalCostPlugin {
   /** SMS senders to capture; everything else is ignored natively. */
   setSenders(opts: { senders: string[] }): Promise<void>;
@@ -22,6 +30,8 @@ interface PersonalCostPlugin {
   requestAll(): Promise<CaptureStatus>;
   setReminder(opts: { enabled: boolean; hour: number; minute: number }): Promise<void>;
   setUntaggedCount(opts: { count: number }): Promise<void>;
+  /** Pre-formatted texts for the home-screen widget. */
+  setWidget(opts: WidgetData): Promise<void>;
   addListener(event: "capture", fn: () => void): Promise<PluginListenerHandle>;
 }
 

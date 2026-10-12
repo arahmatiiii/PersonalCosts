@@ -4,4 +4,5 @@
     <string name="title_activity_main">PersonalCost</string>
     <string name="package_name">com.personalcost.app</string>
     <string name="custom_url_scheme">com.personalcost.app</string>
+    <string name="widget_description">خرج این ماه و امروز، مانده‌ی پول‌ها</string>
 </resources>

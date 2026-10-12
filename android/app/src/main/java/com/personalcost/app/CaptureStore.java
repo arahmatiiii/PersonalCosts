@@ -28,6 +28,7 @@ public final class CaptureStore {
     private static final String KEY_REMINDER_HOUR = "reminder_hour";
     private static final String KEY_REMINDER_MINUTE = "reminder_minute";
     private static final String KEY_UNTAGGED = "untagged_count";
+    private static final String KEY_WIDGET = "widget";
     private static final int MAX_QUEUE = 500;
 
     private CaptureStore() {}
@@ -94,6 +95,7 @@ public final class CaptureStore {
         while (q.length() > MAX_QUEUE) q.remove(0);
         prefs(c).edit().putString(KEY_QUEUE, q.toString()).commit();
         PersonalCostPlugin.notifyCapture();
+        SpendWidget.refresh(c);
     }
 
     public static synchronized JSONArray queue(Context c) {
@@ -112,6 +114,7 @@ public final class CaptureStore {
             if (o != null && !ids.contains(o.optString("id"))) kept.put(o);
         }
         prefs(c).edit().putString(KEY_QUEUE, kept.toString()).commit();
+        SpendWidget.refresh(c);
     }
 
     public static synchronized int pending(Context c) {
@@ -146,5 +149,20 @@ public final class CaptureStore {
 
     public static int untaggedCount(Context c) {
         return prefs(c).getInt(KEY_UNTAGGED, 0);
+    }
+
+    // ---------------------------------------------------------------- widget
+
+    /** Pre-formatted texts for the home-screen widget, pushed by the JS side. */
+    public static void setWidget(Context c, JSONObject data) {
+        prefs(c).edit().putString(KEY_WIDGET, data.toString()).commit();
+    }
+
+    public static JSONObject widget(Context c) {
+        try {
+            return new JSONObject(prefs(c).getString(KEY_WIDGET, "{}"));
+        } catch (JSONException e) {
+            return new JSONObject();
+        }
     }
 }

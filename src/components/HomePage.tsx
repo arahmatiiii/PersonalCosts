@@ -1,12 +1,14 @@
-import { ChevronLeft, Inbox, Plus } from "lucide-react";
+import { ChevronLeft, Landmark, PenLine, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { faNum, rialToToman, startOfDay } from "../lib/format";
 import { fundsForMonth } from "../lib/funds";
+import { paceVsLastMonth } from "../lib/stats";
 import { monthLabel, monthOf, monthRange, MONTHS, toJalali } from "../lib/jalali";
 import { useStore } from "../store/useStore";
 import AddSheet from "./AddSheet";
 import Amount from "./Amount";
 import FundCards from "./FundCards";
+import FundSheet from "./FundSheet";
 import ReviewCard from "./ReviewCard";
 import TransactionRow from "./TransactionRow";
 import TransactionSheet from "./TransactionSheet";
@@ -18,6 +20,7 @@ export default function HomePage() {
   const { transactions, banks, tags, setActiveTab } = useStore();
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [openFund, setOpenFund] = useState<string | null>(null);
 
   const now = new Date();
   const month = monthOf(now);
@@ -34,6 +37,9 @@ export default function HomePage() {
   const fundsLeft = funds.reduce((s, f) => s + f.remaining, 0);
   const untagged = sorted.filter((t) => !t.tagged).reverse(); // oldest first
   const recent = sorted.slice(0, 5);
+  const pace = useMemo(() => paceVsLastMonth(transactions, now), [transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hour = now.getHours();
+  const greeting = hour < 5 ? "شب بخیر" : hour < 12 ? "صبح بخیر" : hour < 17 ? "روز بخیر" : "عصر بخیر";
 
   const topTags = useMemo(() => {
     const m = new Map<string, number>();
@@ -47,7 +53,9 @@ export default function HomePage() {
     <>
       <header className="home-head">
         <div>
-          <div className="muted small">{WEEKDAY.format(now)}</div>
+          <div className="muted small">
+            {greeting} · {WEEKDAY.format(now)}
+          </div>
           <div className="home-date">
             {faNum(jd)} {MONTHS[jm - 1]}
           </div>
@@ -60,6 +68,12 @@ export default function HomePage() {
           {faNum(rialToToman(monthSpent))}
           <small>تومان</small>
         </span>
+        {pace !== null && Math.abs(pace) >= 0.01 && (
+          <span className={`pace ${pace > 0 ? "up" : "down"}`}>
+            {pace > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            {faNum(Math.round(Math.abs(pace) * 100))}٪ {pace > 0 ? "بیشتر" : "کمتر"} از همین موقع ماه قبل
+          </span>
+        )}
         <div className="hero-stats">
           <div>
             <span>امروز</span>
@@ -79,8 +93,11 @@ export default function HomePage() {
 
       {funds.length > 0 && (
         <section>
-          <div className="section-title">پول‌ها</div>
-          <FundCards funds={funds} tags={tags} />
+          <div className="section-head">
+            <span className="section-title">پول‌ها</span>
+            <span className="muted small section-hint">برای جزئیات بزن</span>
+          </div>
+          <FundCards funds={funds} tags={tags} onOpen={setOpenFund} />
         </section>
       )}
 
@@ -118,9 +135,28 @@ export default function HomePage() {
             ))}
           </div>
         ) : (
-          <div className="empty">
-            <Inbox size={36} strokeWidth={1.5} />
-            <span>هنوز تراکنشی نیست</span>
+          <div className="card onboard">
+            <b>شروع کنیم</b>
+            <button type="button" className="onboard-step" onClick={() => setActiveTab("settings")}>
+              <span className="onboard-icon">
+                <Landmark size={18} />
+              </span>
+              <span className="grow">
+                <b>بانکت را اضافه کن</b>
+                <span className="muted small">نام بانک و سرشماره‌ی پیامکش؛ تراکنش‌ها خودکار ثبت می‌شوند.</span>
+              </span>
+              <ChevronLeft size={18} className="muted" />
+            </button>
+            <button type="button" className="onboard-step" onClick={() => setAdding(true)}>
+              <span className="onboard-icon">
+                <PenLine size={18} />
+              </span>
+              <span className="grow">
+                <b>یا دستی ثبت کن</b>
+                <span className="muted small">خرج نقدی یا هر تراکنشی که پیامک ندارد.</span>
+              </span>
+              <ChevronLeft size={18} className="muted" />
+            </button>
           </div>
         )}
       </section>
@@ -130,6 +166,7 @@ export default function HomePage() {
       </button>
       {adding && <AddSheet onClose={() => setAdding(false)} />}
       {open && <TransactionSheet key={open.id} tx={open} onClose={() => setOpenId(null)} />}
+      {openFund && <FundSheet label={openFund} month={month} onClose={() => setOpenFund(null)} />}
     </>
   );
 }

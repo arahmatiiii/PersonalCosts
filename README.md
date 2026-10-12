@@ -17,6 +17,10 @@ A personal expense/income tracker that runs **entirely on the device**, with no 
   - **amount:** the number next to «مبلغ», before «ریال/تومان», or carrying a +/− sign. Balances («مانده/موجودی»), dates, times, card numbers and OTP messages are ignored.
   - **type:** the sign wins (+ income, − expense), then keywords (واریز / برداشت / خرید …). If it can't tell, the transaction is marked with an amber dot for review.
 - **Money is stored in Rial and shown in Toman.** Toman amounts in an SMS are converted.
+- **«پول‌ها» (pots):** every tagged income is a pot for its month; an expense can be paid from it. Stats → پول‌ها lists the month's pots — tap one for what's left, the daily pace and when it runs out, a balance chart, spending by tag and every expense paid from it (plus a «بدون پول» view for unassigned expenses).
+- **Charts:** tag donut and a spending calendar (Stats → کلی), 12-month income/expense bars and a yearly summary (Stats → روند و تورم).
+- **Inflation-aware view:** set the annual rate in Settings → تورم; the trend can show past months in today's money and compares spending per day nominally and in real terms.
+- **Home-screen widget (Android):** this month's and today's spending, what's left in the pots and how many transactions wait for a tag. The app pushes pre-formatted texts to `SpendWidget.java` whenever data changes.
 - **Daily reminder:** a native AlarmManager alarm that shows how many transactions are still untagged.
 - **Permissions:** one button in Settings (SMS + notifications, then the battery-optimization exemption).
 - **Moving data:** phone and web don't share data, because there's no server. Use Settings → Backup to move it.
