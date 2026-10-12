@@ -1,6 +1,6 @@
 import { AlertTriangle, Trash2, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
-import { autoFund, fundDisplay, fundMonthOf, fundOptionsFor } from "../lib/funds";
+import { fundDisplay, fundMonthOf, fundOptionsFor } from "../lib/funds";
 import { useStore } from "../store/useStore";
 import type { Transaction, TxType } from "../types";
 import { haptic } from "../lib/haptic";
@@ -15,19 +15,16 @@ export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onC
   const [tag, setTag] = useState<string | null>(tx.tag);
   // Selected pot as "label|monthKey", or null.
   const [fund, setFund] = useState<string | null>(tx.fund ? `${tx.fund}|${fundMonthOf(tx)}` : null);
-  const [fundTouched, setFundTouched] = useState(false);
   const [note, setNote] = useState(tx.note ?? "");
   const bank = tx.bankId === "cash" ? "نقدی" : (banks.find((b) => b.id === tx.bankId)?.name ?? "بانک");
   const funds = useMemo(() => fundOptionsFor(tx, transactions.filter((t) => t.id !== tx.id)), [tx, transactions]);
 
-  function pickTag(l: string) {
-    const next = tag === l ? null : l;
-    setTag(next);
-    // Picking a tag that is also a «پول» this month pays from it, unless a pot was chosen by hand.
-    if (!fundTouched && type === "expense") {
-      const a = autoFund({ ...tx, type, fund: null, fundMonth: null }, next, transactions);
-      setFund(a.fund ? `${a.fund}|${a.fundMonth}` : null);
-    }
+  const kindTags = tags.filter((t) => t.kind === (type === "income" ? "fund" : "expense"));
+
+  function changeType(next: TxType) {
+    setType(next);
+    // expense tags and «پول» tags are separate lists
+    if (tag && !tags.some((t) => t.label === tag && t.kind === (next === "income" ? "fund" : "expense"))) setTag(null);
   }
 
   function save() {
@@ -55,8 +52,10 @@ export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onC
           <AlertTriangle size={16} /> نوع تراکنش را بررسی کنید
         </div>
       )}
-      <TypeToggle value={type} onChange={setType} />
-      <TagChips tags={tags} value={tag} onPick={pickTag} />
+      <TypeToggle value={type} onChange={changeType} />
+      <span className="field-label">{type === "income" ? "این درآمد کدام پول است؟" : "تگ هزینه"}</span>
+      <TagChips tags={kindTags} value={tag} onPick={(l) => setTag((cur) => (cur === l ? null : l))} />
+      {kindTags.length === 0 && <span className="muted small">در تنظیمات یک {type === "income" ? "تگ پول" : "تگ هزینه"} بساز.</span>}
       {type === "expense" && funds.length > 0 && (
         <div className="fund-pick">
           <span className="fund-pick-label">
@@ -70,10 +69,7 @@ export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onC
                   key={id}
                   type="button"
                   className={`chip outline${fund === id ? " on" : ""}`}
-                  onClick={() => {
-                    setFundTouched(true);
-                    setFund((cur) => (cur === id ? null : id));
-                  }}
+                  onClick={() => setFund((cur) => (cur === id ? null : id))}
                 >
                   {fundDisplay(f.label, f.key, tx.timestamp)}
                 </button>

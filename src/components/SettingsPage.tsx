@@ -1,8 +1,8 @@
 import { Check, Download, Plus, ShieldCheck, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { faNum, normalizeDigits } from "../lib/format";
 import { isNative, PersonalCost, type CaptureStatus } from "../native/personalCost";
 import { makeBackup, useStore, type BackupData } from "../store/useStore";
+import type { TagKind } from "../types";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -85,17 +85,19 @@ function Banks() {
   );
 }
 
-function Tags() {
-  const { tags, addTag, deleteTag } = useStore();
+function Tags({ kind, hint }: { kind: TagKind; hint: string }) {
+  const { tags: all, addTag, deleteTag } = useStore();
+  const tags = all.filter((t) => t.kind === kind);
   const [label, setLabel] = useState("");
   function add(e: React.FormEvent) {
     e.preventDefault();
     const l = label.trim();
-    if (l && !tags.some((t) => t.label === l)) addTag(l);
+    if (l && !tags.some((t) => t.label === l)) addTag(l, kind);
     setLabel("");
   }
   return (
     <div className="stack" style={{ padding: 16 }}>
+      <span className="muted small">{hint}</span>
       {tags.length > 0 && (
         <div className="chips">
           {tags.map((t) => (
@@ -109,7 +111,7 @@ function Tags() {
         </div>
       )}
       <form className="row" onSubmit={add}>
-        <input placeholder="تگ جدید" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <input placeholder={kind === "fund" ? "پول جدید" : "تگ جدید"} value={label} onChange={(e) => setLabel(e.target.value)} />
         <button type="submit" className="icon-btn primary" disabled={!label.trim()} aria-label="افزودن">
           <Plus size={20} />
         </button>
@@ -218,30 +220,12 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <Section title="تورم">
-        <div className="list-row">
-          <div className="grow">
-            <div style={{ fontWeight: 600 }}>نرخ تورم سالانه</div>
-            <div className="muted small">برای «به ارزش امروز» و مقایسه‌ی واقعی در آمار</div>
-          </div>
-          <div className="pct-input">
-            <input
-              className="num"
-              inputMode="numeric"
-              value={faNum(settings.inflationRate)}
-              onChange={(e) => {
-                const v = Number(normalizeDigits(e.target.value).replace(/\D/g, ""));
-                saveSettings({ inflationRate: Math.min(500, v) });
-              }}
-              aria-label="نرخ تورم سالانه"
-            />
-            <span>٪</span>
-          </div>
-        </div>
+      <Section title="تگ‌های هزینه">
+        <Tags kind="expense" hint="برای اینکه هر هزینه چه بوده؛ مثل خوراک، اسنپ، قبض." />
       </Section>
 
-      <Section title="تگ‌ها">
-        <Tags />
+      <Section title="پول‌ها (تگ درآمد)">
+        <Tags kind="fund" hint="هر درآمد با یکی از این‌ها تگ می‌خورد و یک «پول» می‌شود؛ مثل حقوق، پروژه. هر هزینه می‌تواند از یکی از پول‌ها پرداخت شود." />
       </Section>
 
       <Section title="پشتیبان‌گیری">

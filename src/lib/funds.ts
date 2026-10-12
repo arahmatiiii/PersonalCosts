@@ -59,15 +59,3 @@ export function fundDisplay(label: string, fundKey: string, txTimestamp: number)
   const jm = Number(fundKey.split("-")[1]);
   return `${label} ${MONTHS[jm - 1]}`;
 }
-
-/**
- * When an expense gets tag `tag`: if a pot with the same name exists in its month, pay from it
- * automatically — unless a pot was already chosen.
- */
-export function autoFund(tx: Transaction, tag: string | null, transactions: Transaction[]): Pick<Transaction, "fund" | "fundMonth"> {
-  if (tx.type !== "expense") return { fund: null, fundMonth: null };
-  if (tx.fund) return { fund: tx.fund, fundMonth: tx.fundMonth ?? null };
-  const key = monthKey(monthOf(tx.timestamp));
-  if (tag && fundsForMonth(transactions, monthOf(tx.timestamp)).some((f) => f.label === tag)) return { fund: tag, fundMonth: key };
-  return { fund: null, fundMonth: null };
-}

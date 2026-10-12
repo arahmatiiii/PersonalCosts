@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { faNum, startOfDay } from "../lib/format";
 import { fromJalali, monthLength, MONTHS, toJalali, type JMonth } from "../lib/jalali";
-import type { MonthTotal, TagSlice } from "../lib/stats";
+import type { TagSlice } from "../lib/stats";
 import Amount from "./Amount";
 
 /** Ring chart of tag slices with free content in the middle. */
@@ -56,26 +56,6 @@ export function SliceList({ slices, active, onPick }: { slices: TagSlice[]; acti
           </button>
         );
       })}
-    </div>
-  );
-}
-
-const SHORT = MONTHS.map((m) => m.slice(0, 3));
-
-/** Monthly income/expense bars; tap a month to read its numbers. */
-export function TrendBars({ data, selected, onSelect }: { data: MonthTotal[]; selected: number; onSelect: (i: number) => void }) {
-  const max = Math.max(1, ...data.flatMap((d) => [d.income, d.expense]));
-  return (
-    <div className="trend">
-      {data.map((d, i) => (
-        <button key={`${d.month.jy}-${d.month.jm}`} type="button" className={`trend-col${i === selected ? " on" : ""}`} onClick={() => onSelect(i)}>
-          <div className="trend-bars">
-            <div className="trend-bar income" style={{ height: `${(d.income / max) * 100}%` }} />
-            <div className="trend-bar expense" style={{ height: `${(d.expense / max) * 100}%` }} />
-          </div>
-          <span>{SHORT[d.month.jm - 1]}</span>
-        </button>
-      ))}
     </div>
   );
 }
@@ -143,22 +123,22 @@ export function Heatmap({ month, daily }: { month: JMonth; daily: Map<number, nu
   );
 }
 
-/** How a pot's balance went down over time (a step line; time runs right → left). */
-export function BurnChart({ points, total, end }: { points: { t: number; remaining: number }[]; total: number; end: number }) {
+/** A pot's running balance (in − out) over a range: a step line, time running right → left. */
+export function FlowChart({ points, end }: { points: { t: number; balance: number }[]; end: number }) {
   if (points.length === 0) return null;
   const W = 300;
   const H = 120;
   const t0 = points[0].t;
   const t1 = Math.max(end, points[points.length - 1].t, t0 + 86_400_000);
-  const lo = Math.min(0, ...points.map((p) => p.remaining));
-  const hi = Math.max(total, ...points.map((p) => p.remaining), 1);
+  const lo = Math.min(0, ...points.map((p) => p.balance));
+  const hi = Math.max(1, ...points.map((p) => p.balance));
   const x = (t: number) => W - ((t - t0) / (t1 - t0)) * W;
   const y = (v: number) => 6 + (1 - (v - lo) / (hi - lo)) * (H - 12);
   let prev = 0;
   let d = `M ${x(t0)} ${y(0)}`;
   for (const p of points) {
-    d += ` L ${x(p.t)} ${y(prev)} L ${x(p.t)} ${y(p.remaining)}`;
-    prev = p.remaining;
+    d += ` L ${x(p.t)} ${y(prev)} L ${x(p.t)} ${y(p.balance)}`;
+    prev = p.balance;
   }
   d += ` L ${x(t1)} ${y(prev)}`;
   const area = `${d} L ${x(t1)} ${y(lo)} L ${x(t0)} ${y(lo)} Z`;

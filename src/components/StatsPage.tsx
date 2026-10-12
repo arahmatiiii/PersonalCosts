@@ -1,50 +1,97 @@
 import { ChevronLeft, ChevronRight, CircleDollarSign, Search, Sparkles, Wallet, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { endOfDay, faNum, rialToToman, startOfDay, startOfWeek } from "../lib/format";
-import { fundsForMonth } from "../lib/funds";
-import { addMonths, MONTHS, monthLabel, monthOf, monthRange, type JMonth } from "../lib/jalali";
+import { endOfDay, faNum, rialToToman, startOfDay } from "../lib/format";
+import { addMonths, MONTHS, monthLabel, monthOf, monthRange, sameMonth, toJalali, type JMonth } from "../lib/jalali";
 import { normalizeText } from "../lib/parser";
-import { change, dailyExpense, inTodaysMoney, isCurrentMonth, monthlyTotals, monthsBetween, tagBreakdown, UNTAGGED, unfundedExpenses, yearSummary, type Change, type MonthTotal } from "../lib/stats";
+import { dailyExpense, daysIn, fundsInRange, tagBreakdown, UNTAGGED, unfundedExpenses } from "../lib/stats";
 import { useStore } from "../store/useStore";
 import Amount from "./Amount";
-import { Donut, Heatmap, SliceList, TrendBars } from "./Charts";
+import { Donut, Heatmap, SliceList } from "./Charts";
 import DatePicker from "./DatePicker";
 import FundSheet from "./FundSheet";
 import TransactionRow from "./TransactionRow";
 import TransactionSheet from "./TransactionSheet";
 
-type View = "overview" | "funds" | "trend";
-type Range = "week" | "month" | "custom";
+type View = "overview" | "funds";
 type Kind = "all" | "expense" | "income";
 const LIST_PAGE = 20;
 
-function MonthNav({ month, setMonth }: { month: JMonth; setMonth: (f: (m: JMonth) => JMonth) => void }) {
-  return (
-    <div className="month-nav">
-      <button type="button" className="icon-btn" aria-label="ماه قبل" onClick={() => setMonth((m) => addMonths(m, -1))}>
-        <ChevronRight size={20} />
-      </button>
-      <span>{monthLabel(month)}</span>
-      <button type="button" className="icon-btn" aria-label="ماه بعد" disabled={isCurrentMonth(month)} onClick={() => setMonth((m) => addMonths(m, 1))}>
-        <ChevronLeft size={20} />
-      </button>
-    </div>
-  );
+/** The period every Stats tab works on: one Jalali month, or any custom range of days. */
+interface Period {
+  from: number;
+  to: number;
+  label: string;
+  /** Set when the period is exactly one month (enables the calendar). */
+  month: JMonth | null;
 }
+
+const dayLabel = (d: Date) => {
+  const j = toJalali(d);
+  return `${faNum(j.jd)} ${MONTHS[j.jm - 1]}`;
+};
 
 export default function StatsPage() {
   const [view, setView] = useState<View>("overview");
+  const [mode, setMode] = useState<"month" | "custom">("month");
   const [month, setMonth] = useState(() => monthOf(new Date()));
+  const [customFrom, setCustomFrom] = useState(() => {
+    const d = startOfDay(new Date());
+    d.setDate(d.getDate() - 29);
+    return d;
+  });
+  const [customTo, setCustomTo] = useState(() => startOfDay(new Date()));
+
+  const period = useMemo((): Period => {
+    if (mode === "month") {
+      const [from, to] = monthRange(month);
+      return { from, to, label: monthLabel(month), month };
+    }
+    const [a, b] = customFrom <= customTo ? [customFrom, customTo] : [customTo, customFrom];
+    return { from: startOfDay(a).getTime(), to: endOfDay(b).getTime(), label: `${dayLabel(a)} تا ${dayLabel(b)}`, month: null };
+  }, [mode, month, customFrom, customTo]);
+  const days = Math.round((period.to + 1 - period.from) / 86_400_000);
 
   return (
     <>
       <h1 className="page-title">آمار</h1>
+
+      <div className="seg">
+        <button type="button" className={mode === "month" ? "on" : ""} onClick={() => setMode("month")}>
+          ماه
+        </button>
+        <button type="button" className={mode === "custom" ? "on" : ""} onClick={() => setMode("custom")}>
+          بازه‌ی دلخواه
+        </button>
+      </div>
+      {mode === "month" ? (
+        <div className="month-nav">
+          <button type="button" className="icon-btn" aria-label="ماه قبل" onClick={() => setMonth((m) => addMonths(m, -1))}>
+            <ChevronRight size={20} />
+          </button>
+          <span>{monthLabel(month)}</span>
+          <button type="button" className="icon-btn" aria-label="ماه بعد" disabled={sameMonth(month, monthOf(new Date()))} onClick={() => setMonth((m) => addMonths(m, 1))}>
+            <ChevronLeft size={20} />
+          </button>
+        </div>
+      ) : (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="row">
+            <span className="muted small range-label">از</span>
+            <DatePicker value={customFrom} onChange={setCustomFrom} />
+          </div>
+          <div className="row">
+            <span className="muted small range-label">تا</span>
+            <DatePicker value={customTo} onChange={setCustomTo} />
+          </div>
+          <span className="muted small range-days">{faNum(days)} روز</span>
+        </div>
+      )}
+
       <div className="tabs" role="tablist">
         {(
           [
-            ["overview", "کلی"],
-            ["funds", "پول‌ها"],
-            ["trend", "روند و تورم"],
+            ["overview", "آمار کلی"],
+            ["funds", "آمار پول‌ها"],
           ] as const
         ).map(([v, label]) => (
           <button key={v} type="button" role="tab" aria-selected={view === v} className={view === v ? "on" : ""} onClick={() => setView(v)}>
@@ -52,30 +99,21 @@ export default function StatsPage() {
           </button>
         ))}
       </div>
-      {view === "overview" ? <Overview month={month} setMonth={setMonth} /> : view === "funds" ? <Funds month={month} setMonth={setMonth} /> : <Trend />}
+      {view === "overview" ? <Overview period={period} /> : <Funds period={period} />}
     </>
   );
 }
 
 // ------------------------------------------------------------------ کلی
 
-function Overview({ month, setMonth }: { month: JMonth; setMonth: (f: (m: JMonth) => JMonth) => void }) {
+function Overview({ period }: { period: Period }) {
   const { transactions, tags, banks } = useStore();
-  const [range, setRange] = useState<Range>("month");
-  const [customFrom, setCustomFrom] = useState(() => startOfWeek(new Date()));
-  const [customTo, setCustomTo] = useState(() => startOfDay(new Date()));
+  const { from, to } = period;
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<Kind>("all");
   const [selTags, setSelTags] = useState<string[]>([]);
   const [listLimit, setListLimit] = useState(LIST_PAGE);
   const [openId, setOpenId] = useState<string | null>(null);
-
-  const [from, to] = useMemo((): [number, number] => {
-    if (range === "week") return [startOfWeek(new Date()).getTime(), endOfDay(new Date()).getTime()];
-    if (range === "month") return monthRange(month);
-    const [a, b] = customFrom <= customTo ? [customFrom, customTo] : [customTo, customFrom];
-    return [startOfDay(a).getTime(), endOfDay(b).getTime()];
-  }, [range, month, customFrom, customTo]);
 
   const bankById = useMemo(() => new Map(banks.map((b) => [b.id, b])), [banks]);
 
@@ -105,35 +143,15 @@ function Overview({ month, setMonth }: { month: JMonth; setMonth: (f: (m: JMonth
   const daily = useMemo(() => dailyExpense(filtered, from, to), [filtered, from, to]);
 
   const net = income - expense;
-  const days = Math.max(1, Math.ceil((Math.min(Date.now(), to) - from) / 86_400_000));
-  const allTagLabels = [...tags.map((t) => t.label), UNTAGGED];
+  const days = daysIn(from, to);
+  const filterTags = kind === "income" ? tags.filter((t) => t.kind === "fund") : kind === "expense" ? tags.filter((t) => t.kind === "expense") : tags;
+  const allTagLabels = [...new Set([...filterTags.map((t) => t.label), UNTAGGED])];
   const open = openId ? transactions.find((t) => t.id === openId) : undefined;
   const toggleTag = (l: string) => setSelTags((s) => (s.includes(l) ? s.filter((x) => x !== l) : [...s, l]));
   const hasFilter = query || kind !== "all" || selTags.length > 0;
 
   return (
     <>
-      <div className="seg">
-        {(["week", "month", "custom"] as Range[]).map((r) => (
-          <button key={r} type="button" className={range === r ? "on" : ""} onClick={() => setRange(r)}>
-            {{ week: "این هفته", month: "ماه", custom: "بازه‌ی دلخواه" }[r]}
-          </button>
-        ))}
-      </div>
-      {range === "month" && <MonthNav month={month} setMonth={setMonth} />}
-      {range === "custom" && (
-        <div className="stack" style={{ gap: 8 }}>
-          <div className="row">
-            <span className="muted small range-label">از</span>
-            <DatePicker value={customFrom} onChange={setCustomFrom} />
-          </div>
-          <div className="row">
-            <span className="muted small range-label">تا</span>
-            <DatePicker value={customTo} onChange={setCustomTo} />
-          </div>
-        </div>
-      )}
-
       <div className="search">
         <Search size={18} />
         <input placeholder="جستجو: تگ، یادداشت، بانک، مبلغ…" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -213,11 +231,11 @@ function Overview({ month, setMonth }: { month: JMonth; setMonth: (f: (m: JMonth
         </section>
       )}
 
-      {range === "month" && expense > 0 && (
+      {period.month && expense > 0 && (
         <section>
           <div className="section-title">تقویم خرج</div>
           <div className="card heat-card">
-            <Heatmap month={month} daily={daily} />
+            <Heatmap month={period.month} daily={daily} />
           </div>
         </section>
       )}
@@ -252,53 +270,53 @@ function Overview({ month, setMonth }: { month: JMonth; setMonth: (f: (m: JMonth
 
 // ------------------------------------------------------------------ پول‌ها
 
-function Funds({ month, setMonth }: { month: JMonth; setMonth: (f: (m: JMonth) => JMonth) => void }) {
+function Funds({ period }: { period: Period }) {
   const { transactions, tags } = useStore();
+  const { from, to } = period;
   const [openFund, setOpenFund] = useState<string | null | undefined>(undefined);
-  const funds = useMemo(() => fundsForMonth(transactions, month), [transactions, month]);
-  const unfunded = useMemo(() => unfundedExpenses(transactions, month), [transactions, month]);
-  const total = funds.reduce((s, f) => s + f.total, 0);
+  const funds = useMemo(() => fundsInRange(transactions, from, to, period.month ?? undefined), [transactions, from, to, period.month]);
+  const unfunded = useMemo(() => unfundedExpenses(transactions, from, to), [transactions, from, to]);
+  const income = funds.reduce((s, f) => s + f.income, 0);
   const spent = funds.reduce((s, f) => s + f.spent, 0);
   const unfundedSum = unfunded.reduce((s, t) => s + t.amount, 0);
 
   return (
     <>
-      <MonthNav month={month} setMonth={setMonth} />
-
       {funds.length === 0 ? (
         <div className="card empty-card">
           <CircleDollarSign size={36} strokeWidth={1.5} />
-          <b>در {monthLabel(month)} پولی ثبت نشده</b>
-          <span className="muted small">هر درآمدی که تگ بخورد (مثلاً «حقوق») یک «پول» این ماه می‌شود و می‌توانی هزینه‌ها را از آن پرداخت کنی.</span>
+          <b>در این بازه پولی جابه‌جا نشده</b>
+          <span className="muted small">هر درآمدی که تگ «پول» بخورد (مثلاً «حقوق») یک پول می‌شود و برای هر هزینه می‌توانی انتخاب کنی از کدام پول خرج شده.</span>
         </div>
       ) : (
         <>
           <div className="card summary">
             <div className="row">
               <div className="grow">
-                <div className="muted small">مانده‌ی همه‌ی پول‌ها</div>
-                <Amount rial={total - spent} className={`net${total - spent < 0 ? " expense" : ""}`} />
+                <div className="muted small">خالص پول‌ها در {period.month ? "این ماه" : "این بازه"}</div>
+                <Amount rial={income - spent} type={income - spent < 0 ? "expense" : undefined} className="net" />
               </div>
             </div>
             <div className="split">
               <div>
                 <span className="muted small">ورودی</span>
-                <Amount rial={total} className="income" />
+                <Amount rial={income} className="income" />
               </div>
               <div>
-                <span className="muted small">خرج شده</span>
+                <span className="muted small">خرج شده از پول‌ها</span>
                 <Amount rial={spent} className="expense" />
               </div>
             </div>
           </div>
 
           <div className="muted small hint">
-            <Sparkles size={14} /> روی هر پول بزن تا ببینی کجا خرج شده
+            <Sparkles size={14} /> روی هر پول بزن تا هزینه‌هایش را در همین بازه ببینی
           </div>
           <div className="stack">
             {funds.map((f) => {
-              const color = tags.find((t) => t.label === f.label)?.color ?? "var(--primary)";
-              const pct = f.total ? Math.min(100, (f.spent / f.total) * 100) : 0;
+              const color = tags.find((t) => t.label === f.label && t.kind === "fund")?.color ?? "var(--primary)";
+              const net = f.income - f.spent;
+              const pct = f.income ? Math.min(100, (f.spent / f.income) * 100) : 100;
               return (
                 <button key={f.label} type="button" className="card fund-row" style={{ "--c": color } as React.CSSProperties} onClick={() => setOpenFund(f.label)}>
                   <div className="row">
@@ -310,19 +328,20 @@ function Funds({ month, setMonth }: { month: JMonth; setMonth: (f: (m: JMonth) =
                   </div>
                   <div className="row fund-row-nums">
                     <div className="grow">
-                      <span className="muted small">مانده</span>
-                      <Amount rial={f.remaining} className={`fund-left${f.remaining < 0 ? " expense" : ""}`} />
+                      <span className="muted small">ورودی</span>
+                      <Amount rial={f.income} className="fund-left income" />
                     </div>
                     <div className="fund-row-side">
                       <span className="muted small">خرج شده</span>
-                      <Amount rial={f.spent} />
+                      <Amount rial={f.spent} className="expense" />
                     </div>
                   </div>
                   <div className="bar-track">
                     <div className="bar-fill" style={{ width: `${pct}%`, background: color }} />
                   </div>
-                  <span className="muted small">
-                    {faNum(Math.round(pct))}٪ از <Amount rial={f.total} />
+                  <span className={`small ${net < 0 ? "expense" : "muted"}`}>
+                    خالص: <Amount rial={net} type={net < 0 ? "expense" : undefined} />
+                    {f.income === 0 && " · ورودی این پول بیرون از این بازه بوده"}
                   </span>
                 </button>
               );
@@ -342,192 +361,11 @@ function Funds({ month, setMonth }: { month: JMonth; setMonth: (f: (m: JMonth) =
             <ChevronLeft size={18} className="muted" />
           </div>
           <Amount rial={unfundedSum} className="fund-left" />
-          <span className="muted small">هزینه‌های این ماه که از هیچ پولی پرداخت نشده‌اند</span>
+          <span className="muted small">هزینه‌های این بازه که از هیچ پولی پرداخت نشده‌اند</span>
         </button>
       )}
 
-      {openFund !== undefined && <FundSheet label={openFund} month={month} onClose={() => setOpenFund(undefined)} />}
-    </>
-  );
-}
-
-// ------------------------------------------------------------------ روند و تورم
-
-const WEEKDAYS = ["یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه"];
-
-function pct(x: number): string {
-  const v = Math.round(Math.abs(x) * 100);
-  return `${faNum(v)}٪ ${x >= 0 ? "بیشتر" : "کمتر"}`;
-}
-
-function ChangeRow({ title, c, rate }: { title: string; c: Change | null; rate: number }) {
-  if (!c) return null;
-  return (
-    <div className="change-row">
-      <span className="muted small">{title}</span>
-      <div className="change-vals">
-        <span>
-          اسمی <b className={c.nominal > 0 ? "expense" : "income"}>{pct(c.nominal)}</b>
-        </span>
-        <span>
-          واقعی <b className={c.real > 0 ? "expense" : "income"}>{pct(c.real)}</b>
-        </span>
-      </div>
-      <span className="muted small">
-        {c.real <= 0 && c.nominal > 0
-          ? "رقم بیشتر شده، ولی با حساب تورم در واقع کمتر خرج کرده‌ای."
-          : c.real > 0
-            ? `حتی با تورم ${faNum(rate)}٪ هم بیشتر خرج کرده‌ای.`
-            : "هم اسمی و هم واقعی کمتر خرج کرده‌ای."}
-      </span>
-    </div>
-  );
-}
-
-function Trend() {
-  const { transactions, tags, settings, setActiveTab } = useStore();
-  const rate = settings.inflationRate;
-  const now = monthOf(new Date());
-  const [real, setReal] = useState(false);
-  const [sel, setSel] = useState(11);
-  const [year, setYear] = useState(now.jy);
-
-  // 15 months so the oldest bar still has three months before it to compare with
-  const all = useMemo(() => monthlyTotals(transactions, now, 15), [transactions, now.jy, now.jm]); // eslint-disable-line react-hooks/exhaustive-deps
-  const raw = all.slice(3);
-  const data = useMemo(
-    () =>
-      real
-        ? raw.map((m) => {
-            const ago = monthsBetween(m.month, now);
-            return { ...m, income: inTodaysMoney(m.income, ago, rate), expense: inTodaysMoney(m.expense, ago, rate) };
-          })
-        : raw,
-    [raw, real, rate], // eslint-disable-line react-hooks/exhaustive-deps
-  );
-  const s = data[sel];
-  const selMonth = raw[sel].month;
-  // Compare spending per day, so a month still in progress is compared fairly.
-  const perDay = (m: MonthTotal) => {
-    const [from, to] = monthRange(m.month);
-    return m.expense / Math.max(1, Math.ceil((Math.min(Date.now(), to) - from) / 86_400_000));
-  };
-  const cur = perDay(all[sel + 3]);
-  const lastYearTotal = useMemo(() => monthlyTotals(transactions, addMonths(selMonth, -12), 1)[0], [transactions, selMonth]);
-  const lastYear = perDay(lastYearTotal);
-  const avg3 = (perDay(all[sel]) + perDay(all[sel + 1]) + perDay(all[sel + 2])) / 3;
-  const summary = useMemo(() => yearSummary(transactions, year, tags), [transactions, year, tags]);
-  const saved = summary.income - summary.expense;
-  const firstYear = useMemo(() => (transactions.length ? monthOf(Math.min(...transactions.map((t) => t.timestamp))).jy : now.jy), [transactions]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <>
-      <section>
-        <div className="section-head">
-          <span className="section-title">۱۲ ماه اخیر</span>
-          <label className="mini-switch">
-            <span className="small">به ارزش امروز</span>
-            <span className="switch">
-              <input type="checkbox" checked={real} onChange={(e) => setReal(e.target.checked)} />
-              <span />
-            </span>
-          </label>
-        </div>
-        <div className="card trend-card">
-          <div className="trend-head">
-            <b>{monthLabel(s.month)}</b>
-            <div className="trend-legend small">
-              <span>
-                <i className="dot" style={{ background: "var(--income)" }} /> درآمد <Amount rial={Math.round(s.income)} />
-              </span>
-              <span>
-                <i className="dot" style={{ background: "var(--expense)" }} /> هزینه <Amount rial={Math.round(s.expense)} />
-              </span>
-            </div>
-          </div>
-          <TrendBars data={data} selected={sel} onSelect={setSel} />
-          {real && (
-            <span className="muted small">
-              مبالغ ماه‌های قبل با تورم سالانه‌ی {faNum(rate)}٪ به پول امروز تبدیل شده‌اند.{" "}
-              <button type="button" className="inline-link" onClick={() => setActiveTab("settings")}>
-                تغییر نرخ
-              </button>
-            </span>
-          )}
-        </div>
-      </section>
-
-      {(lastYear > 0 || avg3 > 0) && cur > 0 && (
-        <section>
-          <div className="section-title">خرج روزانه‌ی {monthLabel(selMonth)} در برابر…</div>
-          <div className="card changes">
-            <ChangeRow title={`${MONTHS[selMonth.jm - 1]} پارسال`} c={change(cur, lastYear, 12, rate)} rate={rate} />
-            <ChangeRow title="میانگین ۳ ماه قبلش" c={change(cur, avg3, 2, rate)} rate={rate} />
-            <span className="muted small">برای مقایسه‌ی ماه دیگر، روی ستونش در نمودار بزن.</span>
-          </div>
-        </section>
-      )}
-
-      <section>
-        <div className="section-head">
-          <span className="section-title">سال {faNum(year).replace(/٬/g, "")} در یک نگاه</span>
-          <div className="row" style={{ gap: 0 }}>
-            <button type="button" className="icon-btn" aria-label="سال قبل" disabled={year <= firstYear} onClick={() => setYear((y) => y - 1)}>
-              <ChevronRight size={18} />
-            </button>
-            <button type="button" className="icon-btn" aria-label="سال بعد" disabled={year >= now.jy} onClick={() => setYear((y) => y + 1)}>
-              <ChevronLeft size={18} />
-            </button>
-          </div>
-        </div>
-        {summary.count === 0 ? (
-          <div className="empty small">در این سال تراکنشی نیست</div>
-        ) : (
-          <div className="year-grid">
-            <div className="card year-cell">
-              <span className="muted small">کل درآمد</span>
-              <Amount rial={summary.income} className="income" />
-            </div>
-            <div className="card year-cell">
-              <span className="muted small">کل هزینه</span>
-              <Amount rial={summary.expense} className="expense" />
-            </div>
-            <div className="card year-cell wide">
-              <span className="muted small">{saved >= 0 ? "پس‌انداز" : "کسری"}</span>
-              <Amount rial={saved} type={saved >= 0 ? "income" : "expense"} className="year-big" />
-              {summary.income > 0 && <span className="muted small">{faNum(Math.round((saved / summary.income) * 100))}٪ از درآمد</span>}
-            </div>
-            {summary.topTag && (
-              <div className="card year-cell">
-                <span className="muted small">بیشترین خرج</span>
-                <b>{summary.topTag.label}</b>
-                <Amount rial={summary.topTag.amount} />
-              </div>
-            )}
-            {summary.topMonth && (
-              <div className="card year-cell">
-                <span className="muted small">پرخرج‌ترین ماه</span>
-                <b>{MONTHS[summary.topMonth.month.jm - 1]}</b>
-                <Amount rial={summary.topMonth.expense} />
-              </div>
-            )}
-            {summary.biggest && (
-              <div className="card year-cell">
-                <span className="muted small">گران‌ترین خرید</span>
-                <b>{summary.biggest.tag ?? summary.biggest.note ?? "بدون تگ"}</b>
-                <Amount rial={summary.biggest.amount} />
-              </div>
-            )}
-            {summary.busiestWeekday !== null && (
-              <div className="card year-cell">
-                <span className="muted small">پرخرج‌ترین روز هفته</span>
-                <b>{WEEKDAYS[summary.busiestWeekday]}</b>
-                <span className="muted small">{faNum(summary.count)} تراکنش در سال</span>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      {openFund !== undefined && <FundSheet label={openFund} from={from} to={to} rangeLabel={period.label} potMonth={period.month ?? undefined} onClose={() => setOpenFund(undefined)} />}
     </>
   );
 }

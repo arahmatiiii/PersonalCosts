@@ -166,7 +166,7 @@ export default function HomePage() {
       </button>
       {adding && <AddSheet onClose={() => setAdding(false)} />}
       {open && <TransactionSheet key={open.id} tx={open} onClose={() => setOpenId(null)} />}
-      {openFund && <FundSheet label={openFund} month={month} onClose={() => setOpenFund(null)} />}
+      {openFund && <FundSheet label={openFund} from={mFrom} to={monthRange(month)[1]} rangeLabel={monthLabel(month)} potMonth={month} onClose={() => setOpenFund(null)} />}
     </>
   );
 }
