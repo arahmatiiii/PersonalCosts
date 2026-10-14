@@ -1,5 +1,7 @@
 # PersonalCost — هزینه‌های شخصی
 
+**راهنمای فارسی استفاده پس از نصب:** [معرفی محصول، آموزش تمام بخش‌ها و اسکرین‌شات با دادهٔ نمونه](how%20to%20use.md).
+
 A personal expense/income tracker that runs **entirely on the device**, with no backend, no Firebase and no account. It follows the same setup as Lamoo_web:
 
 - **One React + Vite app.** It's built into a single `index.html` and runs in two places:
