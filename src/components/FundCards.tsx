@@ -9,7 +9,6 @@ export default function FundCards({ funds, tags, onOpen }: { funds: Fund[]; tags
     <div className="funds">
       {funds.map((f) => {
         const color = tags.find((t) => t.label === f.label && t.kind === "fund")?.color ?? "var(--primary)";
-        const pct = f.total ? Math.min(100, (f.spent / f.total) * 100) : 0;
         return (
           <button key={f.label} type="button" className="card fund" style={{ "--c": color } as React.CSSProperties} onClick={() => onOpen(f.label)}>
             <div className="row">
@@ -20,12 +19,6 @@ export default function FundCards({ funds, tags, onOpen }: { funds: Fund[]; tags
               <ChevronLeft size={16} className="muted" />
             </div>
             <Amount rial={f.remaining} className={`fund-left${f.remaining < 0 ? " expense" : ""}`} />
-            <div className="bar-track">
-              <div className="bar-fill" style={{ width: `${pct}%`, background: color }} />
-            </div>
-            <span className="muted small">
-              {Math.round(pct).toLocaleString("fa-IR")}٪ خرج شده از <Amount rial={f.total} />
-            </span>
           </button>
         );
       })}
