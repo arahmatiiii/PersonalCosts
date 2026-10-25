@@ -1,6 +1,6 @@
 import { ArrowDownLeft, Banknote, Tag as TagIcon } from "lucide-react";
 import { formatTime } from "../lib/format";
-import { fundDisplay, fundMonthOf } from "../lib/funds";
+import { fundDisplay } from "../lib/funds";
 import type { Bank, Tag, Transaction } from "../types";
 import Amount from "./Amount";
 
@@ -18,7 +18,7 @@ export default function TransactionRow({ tx, bank, tags, onOpen, showDate }: Pro
   const d = new Date(tx.timestamp);
   const when = showDate ? d.toLocaleDateString("fa-IR", { day: "numeric", month: "short" }) : formatTime(d);
   const title = tx.tag ?? (tx.note || bankName);
-  const sub = [tx.tag ? bankName : null, tx.fund ? `از ${fundDisplay(tx.fund, fundMonthOf(tx), tx.timestamp)}` : null, when].filter(Boolean).join(" · ");
+  const sub = [tx.tag ? bankName : null, tx.fund ? `از ${fundDisplay(tx.fund)}` : null, when].filter(Boolean).join(" · ");
   const color = tag?.color ?? (tx.type === "income" ? "var(--income)" : "var(--muted)");
 
   return (

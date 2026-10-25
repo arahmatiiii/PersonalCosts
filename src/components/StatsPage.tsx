@@ -274,7 +274,7 @@ function Funds({ period }: { period: Period }) {
   const { transactions, tags } = useStore();
   const { from, to } = period;
   const [openFund, setOpenFund] = useState<string | null | undefined>(undefined);
-  const funds = useMemo(() => fundsInRange(transactions, from, to, period.month ?? undefined), [transactions, from, to, period.month]);
+  const funds = useMemo(() => fundsInRange(transactions, from, to), [transactions, from, to]);
   const unfunded = useMemo(() => unfundedExpenses(transactions, from, to), [transactions, from, to]);
   const income = funds.reduce((s, f) => s + f.income, 0);
   const spent = funds.reduce((s, f) => s + f.spent, 0);
@@ -365,7 +365,7 @@ function Funds({ period }: { period: Period }) {
         </button>
       )}
 
-      {openFund !== undefined && <FundSheet label={openFund} from={from} to={to} rangeLabel={period.label} potMonth={period.month ?? undefined} onClose={() => setOpenFund(undefined)} />}
+      {openFund !== undefined && <FundSheet label={openFund} from={from} to={to} rangeLabel={period.label} onClose={() => setOpenFund(undefined)} />}
     </>
   );
 }

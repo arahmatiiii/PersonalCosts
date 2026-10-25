@@ -1,7 +1,7 @@
 import { ChevronLeft, Sparkles, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
 import { formatRelative } from "../lib/format";
-import { fundDisplay, fundOptionsFor } from "../lib/funds";
+import { allFunds, fundDisplay } from "../lib/funds";
 import { haptic } from "../lib/haptic";
 import { useStore } from "../store/useStore";
 import type { Transaction } from "../types";
@@ -12,9 +12,9 @@ import TagChips from "./TagChips";
 export default function ReviewCard({ items }: { items: Transaction[] }) {
   const { tags, banks, transactions, tagTransaction, updateTransaction, showToast } = useStore();
   const [skip, setSkip] = useState(0);
-  const [fund, setFund] = useState<string | null>(null); // "label|monthKey"
+  const [fund, setFund] = useState<string | null>(null);
   const tx = items.length ? items[skip % items.length] : undefined;
-  const funds = useMemo(() => (tx?.type === "expense" ? fundOptionsFor(tx, transactions) : []), [tx, transactions]);
+  const fundLabels = useMemo(() => (tx?.type === "expense" ? allFunds(transactions).filter((f) => f.remaining > 0).map((f) => f.label) : []), [tx, transactions]);
   if (!tx) return null;
   const i = skip % items.length;
   const bank = tx.bankId === "cash" ? "نقدی" : (banks.find((b) => b.id === tx.bankId)?.name ?? "بانک");
@@ -48,20 +48,17 @@ export default function ReviewCard({ items }: { items: Transaction[] }) {
           {bank} · {formatRelative(new Date(tx.timestamp))}
         </span>
       </div>
-      {funds.length > 0 && (
+      {fundLabels.length > 0 && (
         <div className="fund-pick">
           <span className="fund-pick-label">
             <Wallet size={16} /> از
           </span>
           <div className="chips scroll">
-            {funds.map((f) => {
-              const id = `${f.label}|${f.key}`;
-              return (
-                <button key={id} type="button" className={`chip outline${fund === id ? " on" : ""}`} onClick={() => setFund((cur) => (cur === id ? null : id))}>
-                  {fundDisplay(f.label, f.key, tx.timestamp)}
-                </button>
-              );
-            })}
+            {fundLabels.map((f) => (
+              <button key={f} type="button" className={`chip outline${fund === f ? " on" : ""}`} onClick={() => setFund((cur) => (cur === f ? null : f))}>
+                {fundDisplay(f)}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -71,11 +68,10 @@ export default function ReviewCard({ items }: { items: Transaction[] }) {
         scroll
         onPick={(label) => {
           haptic();
-          const [f, fm] = fund ? fund.split("|") : [null, null];
-          tagTransaction(tx.id, label, tx.type === "expense" ? { fund: f, fundMonth: fm } : undefined);
+          tagTransaction(tx.id, label, tx.type === "expense" ? { fund: fund ?? undefined } : undefined);
           setFund(null);
-          const { id, fund: oldFund = null, fundMonth: oldFundMonth = null, ...before } = tx;
-          showToast(`«${label}» ثبت شد`, () => updateTransaction(id, { ...before, fund: oldFund, fundMonth: oldFundMonth }));
+          const { id, fund: oldFund = null, ...before } = tx;
+          showToast(`«${label}» ثبت شد`, () => updateTransaction(id, { ...before, fund: oldFund }));
         }}
       />
       {kindTags.length === 0 && <span className="muted small">در تنظیمات یک {tx.type === "income" ? "تگ پول" : "تگ هزینه"} بساز.</span>}

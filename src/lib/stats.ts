@@ -1,6 +1,6 @@
 import type { Tag, Transaction } from "../types";
 import { startOfDay } from "./format";
-import { addMonths, monthKey, monthOf, monthRange, type JMonth } from "./jalali";
+import { addMonths, monthOf, monthRange } from "./jalali";
 
 const DAY = 86_400_000;
 export const UNTAGGED = "بدون تگ";

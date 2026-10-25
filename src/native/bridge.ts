@@ -1,5 +1,5 @@
 import { formatToman, startOfDay } from "../lib/format";
-import { fundsForMonth } from "../lib/funds";
+import { allFunds } from "../lib/funds";
 import { readCaptures } from "../lib/ingest";
 import { monthOf, monthRange, MONTHS } from "../lib/jalali";
 import type { Transaction } from "../types";
@@ -17,7 +17,7 @@ export function widgetData(transactions: Transaction[], now = new Date()): Widge
     monthSpent += t.amount;
     if (t.timestamp >= today) todaySpent += t.amount;
   }
-  const funds = fundsForMonth(transactions, month);
+  const funds = allFunds(transactions);
   return {
     title: `خرج ${MONTHS[month.jm - 1]}`,
     month: formatToman(monthSpent),

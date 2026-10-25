@@ -1,7 +1,7 @@
 import { ChevronLeft, Landmark, MessageSquareWarning, PenLine, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { faNum, rialToToman, startOfDay } from "../lib/format";
-import { fundsForMonth } from "../lib/funds";
+import { allFunds } from "../lib/funds";
 import { paceVsLastMonth } from "../lib/stats";
 import { monthLabel, monthOf, monthRange, MONTHS, toJalali } from "../lib/jalali";
 import { useStore } from "../store/useStore";
@@ -36,7 +36,7 @@ export default function HomePage() {
   const monthTx = sorted.filter((t) => t.timestamp >= mFrom);
   const monthSpent = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   const todaySpent = monthTx.filter((t) => t.type === "expense" && t.timestamp >= todayStart).reduce((s, t) => s + t.amount, 0);
-  const funds = useMemo(() => fundsForMonth(transactions, month), [transactions, month.jy, month.jm]); // eslint-disable-line react-hooks/exhaustive-deps
+  const funds = useMemo(() => allFunds(transactions), [transactions]);
   const fundsLeft = funds.reduce((s, f) => s + f.remaining, 0);
   const untagged = sorted.filter((t) => !t.tagged).reverse(); // oldest first
   const recent = sorted.slice(0, 5);
@@ -183,7 +183,7 @@ export default function HomePage() {
       {adding && <AddSheet onClose={() => setAdding(false)} />}
       {open && <TransactionSheet key={open.id} tx={open} onClose={() => setOpenId(null)} />}
       {showUnread && <UnreadSheet onClose={() => setShowUnread(false)} />}
-      {openFund && <FundSheet label={openFund} from={mFrom} to={monthRange(month)[1]} rangeLabel={monthLabel(month)} potMonth={month} onClose={() => setOpenFund(null)} />}
+      {openFund && <FundSheet label={openFund} from={mFrom} to={monthRange(month)[1]} rangeLabel={monthLabel(month)} onClose={() => setOpenFund(null)} />}
     </>
   );
 }

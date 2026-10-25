@@ -1,6 +1,6 @@
 import { AlertTriangle, Trash2, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
-import { fundDisplay, fundMonthOf, fundOptionsFor } from "../lib/funds";
+import { allFunds, fundDisplay } from "../lib/funds";
 import { useStore } from "../store/useStore";
 import type { Transaction, TxType } from "../types";
 import { haptic } from "../lib/haptic";
@@ -14,18 +14,17 @@ export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onC
   const { tags, banks, transactions, updateTransaction, deleteTransaction, addTransactions, showToast } = useStore();
   const [type, setType] = useState<TxType>(tx.type);
   const [tag, setTag] = useState<string | null>(tx.tag);
-  // Selected pot as "label|monthKey", or null.
-  const [fund, setFund] = useState<string | null>(tx.fund ? `${tx.fund}|${fundMonthOf(tx)}` : null);
+  // Selected pot label, or null.
+  const [fund, setFund] = useState<string | null>(tx.fund ?? null);
   const [note, setNote] = useState(tx.note ?? "");
   const [teaching, setTeaching] = useState(false);
   const bank = tx.bankId === "cash" ? "نقدی" : (banks.find((b) => b.id === tx.bankId)?.name ?? "بانک");
-  const funds = useMemo(() => fundOptionsFor(tx, transactions.filter((t) => t.id !== tx.id)), [tx, transactions]);
+  const fundLabels = useMemo(() => allFunds(transactions.filter((t) => t.id !== tx.id)).filter((f) => f.remaining > 0).map((f) => f.label), [tx, transactions]);
 
   const kindTags = tags.filter((t) => t.kind === (type === "income" ? "fund" : "expense"));
 
   function changeType(next: TxType) {
     setType(next);
-    // expense tags and «پول» tags are separate lists
     if (tag && !tags.some((t) => t.label === tag && t.kind === (next === "income" ? "fund" : "expense"))) setTag(null);
   }
 
@@ -33,8 +32,7 @@ export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onC
     updateTransaction(tx.id, {
       type,
       tag,
-      fund: type === "expense" && fund ? fund.split("|")[0] : null,
-      fundMonth: type === "expense" && fund ? fund.split("|")[1] : null,
+      fund: type === "expense" ? fund ?? null : null,
       note: note.trim() || null,
       tagged: tag !== null,
       typeUncertain: false,
@@ -58,25 +56,17 @@ export default function TransactionSheet({ tx, onClose }: { tx: Transaction; onC
       <span className="field-label">{type === "income" ? "این درآمد کدام پول است؟" : "تگ هزینه"}</span>
       <TagChips tags={kindTags} value={tag} onPick={(l) => setTag((cur) => (cur === l ? null : l))} />
       {kindTags.length === 0 && <span className="muted small">در تنظیمات یک {type === "income" ? "تگ پول" : "تگ هزینه"} بساز.</span>}
-      {type === "expense" && funds.length > 0 && (
+      {type === "expense" && fundLabels.length > 0 && (
         <div className="fund-pick">
           <span className="fund-pick-label">
             <Wallet size={16} /> از
           </span>
           <div className="chips">
-            {funds.map((f) => {
-              const id = `${f.label}|${f.key}`;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className={`chip outline${fund === id ? " on" : ""}`}
-                  onClick={() => setFund((cur) => (cur === id ? null : id))}
-                >
-                  {fundDisplay(f.label, f.key, tx.timestamp)}
-                </button>
-              );
-            })}
+            {fundLabels.map((f) => (
+              <button key={f} type="button" className={`chip outline${fund === f ? " on" : ""}`} onClick={() => setFund((cur) => (cur === f ? null : f))}>
+                {fundDisplay(f)}
+              </button>
+            ))}
           </div>
         </div>
       )}

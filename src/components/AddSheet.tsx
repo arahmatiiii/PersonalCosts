@@ -23,12 +23,12 @@ export default function AddSheet({ onClose }: { onClose: () => void }) {
     return d;
   });
   const [tag, setTag] = useState<string | null>(null);
-  const [fund, setFund] = useState<string | null>(null); // "label|monthKey"
+  const [fund, setFund] = useState<string | null>(null); // fund label
   const [note, setNote] = useState("");
   const rial = tomanInputToRial(amount);
   const timestamp = timestampFor(when, picked);
   const kindTags = tags.filter((t) => t.kind === (type === "income" ? "fund" : "expense"));
-  const funds = useMemo(() => (type === "expense" ? fundOptionsFor({ timestamp }, transactions) : []), [type, timestamp, transactions]);
+  const fundLabels = useMemo(() => (type === "expense" ? allFunds(transactions).filter((f) => f.remaining > 0).map((f) => f.label) : []), [type, transactions]);
 
   function changeType(next: TxType) {
     setType(next);
@@ -52,8 +52,7 @@ export default function AddSheet({ onClose }: { onClose: () => void }) {
         note: note.trim() || null,
         tagged: tag !== null,
         typeUncertain: false,
-        fund: fund ? fund.split("|")[0] : null,
-        fundMonth: fund ? fund.split("|")[1] : null,
+        fund: fund ?? null,
         createdAt: Date.now(),
       },
     ]);
@@ -99,20 +98,17 @@ export default function AddSheet({ onClose }: { onClose: () => void }) {
         <span className="field-label">{type === "income" ? "این درآمد کدام پول است؟" : "تگ هزینه"}</span>
         <TagChips tags={kindTags} value={tag} onPick={(l) => setTag((cur) => (cur === l ? null : l))} />
         {kindTags.length === 0 && <span className="muted small">در تنظیمات یک {type === "income" ? "تگ پول" : "تگ هزینه"} بساز.</span>}
-        {funds.length > 0 && (
+        {fundLabels.length > 0 && (
           <div className="fund-pick">
             <span className="fund-pick-label">
               <Wallet size={16} /> از
             </span>
             <div className="chips">
-              {funds.map((f) => {
-                const id = `${f.label}|${f.key}`;
-                return (
-                  <button key={id} type="button" className={`chip outline${fund === id ? " on" : ""}`} onClick={() => setFund((cur) => (cur === id ? null : id))}>
-                    {fundDisplay(f.label, f.key, timestamp)}
-                  </button>
-                );
-              })}
+              {fundLabels.map((f) => (
+                <button key={f} type="button" className={`chip outline${fund === f ? " on" : ""}`} onClick={() => setFund((cur) => (cur === f ? null : f))}>
+                  {fundDisplay(f)}
+                </button>
+              ))}
             </div>
           </div>
         )}

@@ -26,7 +26,7 @@ export interface AppState {
   addTransactions: (txs: Transaction[]) => void;
   updateTransaction: (id: string, patch: Partial<Omit<Transaction, "id">>) => void;
   /** Tag a transaction; an expense can also say which «پول» paid for it. */
-  tagTransaction: (id: string, tag: string, fund?: Pick<Transaction, "fund" | "fundMonth">) => void;
+  tagTransaction: (id: string, tag: string, fund?: Pick<Transaction, "fund">) => void;
   deleteTransaction: (id: string) => void;
 
   addBank: (name: string, sender: string) => void;
