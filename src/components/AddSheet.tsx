@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { faNum, startOfDay, tomanInputToRial } from "../lib/format";
 import { haptic } from "../lib/haptic";
 import DatePicker from "./DatePicker";
-import { fundDisplay, fundOptionsFor } from "../lib/funds";
+import { allFunds, fundDisplay } from "../lib/funds";
 import { newId } from "../lib/id";
 import { useStore } from "../store/useStore";
 import { CASH_BANK_ID, type TxType } from "../types";
