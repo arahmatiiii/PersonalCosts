@@ -30,7 +30,9 @@ public class SmsReceiver extends BroadcastReceiver {
         long now = System.currentTimeMillis();
         for (Map.Entry<String, StringBuilder> e : bySender.entrySet()) {
             if (CaptureStore.matchesSender(context, e.getKey())) {
-                CaptureStore.enqueue(context, e.getKey(), e.getValue().toString(), now);
+                String text = e.getValue().toString();
+                String id = CaptureStore.enqueue(context, e.getKey(), text, now);
+                if (id != null) TagNotifier.showTags(context, id, text);
             }
         }
     }

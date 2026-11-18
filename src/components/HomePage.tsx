@@ -1,9 +1,9 @@
-import { ChevronLeft, Landmark, MessageSquareWarning, PenLine, Plus, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowLeftRight, ChevronLeft, Landmark, MessageSquareWarning, PenLine, Plus, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { faNum, rialToToman, startOfDay } from "../lib/format";
 import { allFunds } from "../lib/funds";
-import { paceVsLastMonth } from "../lib/stats";
-import { monthLabel, monthOf, monthRange, MONTHS, toJalali } from "../lib/jalali";
+import { homePeriod, paceVsLastMonth } from "../lib/stats";
+import { MONTHS, toJalali } from "../lib/jalali";
 import { useStore } from "../store/useStore";
 import AddSheet from "./AddSheet";
 import Amount from "./Amount";
@@ -13,21 +13,23 @@ import ReviewCard from "./ReviewCard";
 import UnreadSheet from "./UnreadSheet";
 import TransactionRow from "./TransactionRow";
 import TransactionSheet from "./TransactionSheet";
+import TransferSheet from "./TransferSheet";
 import WeekBars from "./WeekBars";
 
 const WEEKDAY = new Intl.DateTimeFormat("fa-IR", { weekday: "long" });
 
 export default function HomePage() {
-  const { transactions, banks, tags, setActiveTab } = useStore();
+  const { transactions, transfers, banks, tags, settings, setActiveTab } = useStore();
   const [adding, setAdding] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openFund, setOpenFund] = useState<string | null>(null);
   const [showUnread, setShowUnread] = useState(false);
   const unreadCount = useStore((s) => s.unread.length);
 
   const now = new Date();
-  const month = monthOf(now);
-  const [mFrom] = monthRange(month);
+  const period = homePeriod(settings.salaryDate, now);
+  const mFrom = period.from;
   const todayStart = startOfDay(now).getTime();
   const { jd, jm } = toJalali(now);
 
@@ -36,11 +38,11 @@ export default function HomePage() {
   const monthTx = sorted.filter((t) => t.timestamp >= mFrom);
   const monthSpent = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   const todaySpent = monthTx.filter((t) => t.type === "expense" && t.timestamp >= todayStart).reduce((s, t) => s + t.amount, 0);
-  const funds = useMemo(() => allFunds(transactions), [transactions]);
+  const funds = useMemo(() => allFunds(transactions, transfers), [transactions, transfers]);
   const fundsLeft = funds.reduce((s, f) => s + f.remaining, 0);
   const untagged = sorted.filter((t) => !t.tagged).reverse(); // oldest first
   const recent = sorted.slice(0, 5);
-  const pace = useMemo(() => paceVsLastMonth(transactions, now), [transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pace = useMemo(() => paceVsLastMonth(transactions, now, period.salary ? period.from : null), [transactions, period.from]); // eslint-disable-line react-hooks/exhaustive-deps
   const hour = now.getHours();
   const greeting = hour < 5 ? "شب بخیر" : hour < 12 ? "صبح بخیر" : hour < 17 ? "روز بخیر" : "عصر بخیر";
 
@@ -66,7 +68,7 @@ export default function HomePage() {
       </header>
 
       <div className="hero">
-        <span className="label">خرج {monthLabel(month)}</span>
+        <span className="label">{period.title}</span>
         <span className="value num">
           {faNum(rialToToman(monthSpent))}
           <small>تومان</small>
@@ -74,7 +76,7 @@ export default function HomePage() {
         {pace !== null && Math.abs(pace) >= 0.01 && (
           <span className={`pace ${pace > 0 ? "up" : "down"}`}>
             {pace > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-            {faNum(Math.round(Math.abs(pace) * 100))}٪ {pace > 0 ? "بیشتر" : "کمتر"} از همین موقع ماه قبل
+            {faNum(Math.round(Math.abs(pace) * 100))}٪ {pace > 0 ? "بیشتر" : "کمتر"} از همین موقع {period.salary ? "دوره" : "ماه"} قبل
           </span>
         )}
         <div className="hero-stats">
@@ -111,7 +113,9 @@ export default function HomePage() {
         <section>
           <div className="section-head">
             <span className="section-title">پول‌ها</span>
-            <span className="muted small section-hint">برای جزئیات بزن</span>
+            <button type="button" className="link-btn" onClick={() => setMoving(true)}>
+              <ArrowLeftRight size={16} /> جابجایی
+            </button>
           </div>
           <FundCards funds={funds} tags={tags} onOpen={setOpenFund} />
         </section>
@@ -119,7 +123,7 @@ export default function HomePage() {
 
       {topTags.length > 0 && (
         <section>
-          <div className="section-title">بیشترین خرج این ماه</div>
+          <div className="section-title">بیشترین خرج {period.short}</div>
           <div className="top-tags">
             {topTags.map(([label, amount], i) => {
               const color = tags.find((t) => t.label === label)?.color ?? "var(--muted)";
@@ -183,7 +187,8 @@ export default function HomePage() {
       {adding && <AddSheet onClose={() => setAdding(false)} />}
       {open && <TransactionSheet key={open.id} tx={open} onClose={() => setOpenId(null)} />}
       {showUnread && <UnreadSheet onClose={() => setShowUnread(false)} />}
-      {openFund && <FundSheet label={openFund} from={mFrom} to={monthRange(month)[1]} rangeLabel={monthLabel(month)} onClose={() => setOpenFund(null)} />}
+      {moving && <TransferSheet onClose={() => setMoving(false)} />}
+      {openFund && <FundSheet label={openFund} from={period.from} to={period.to} rangeLabel={period.title.replace(/^خرج /, "")} onClose={() => setOpenFund(null)} />}
     </>
   );
 }

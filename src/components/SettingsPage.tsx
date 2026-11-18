@@ -1,6 +1,7 @@
 import { Check, Download, GraduationCap, Plus, ShieldCheck, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { faNum } from "../lib/format";
+import { faNum, startOfDay } from "../lib/format";
+import DatePicker from "./DatePicker";
 import TeachSheet from "./TeachSheet";
 import { isNative, PersonalCost, type CaptureStatus } from "../native/personalCost";
 import { makeBackup, useStore, type BackupData } from "../store/useStore";
@@ -129,6 +130,36 @@ function Tags({ kind, hint }: { kind: TagKind; hint: string }) {
   );
 }
 
+function SalaryDate() {
+  const { settings, saveSettings } = useStore();
+  const value = settings.salaryDate;
+  const set = (d: Date) => saveSettings({ salaryDate: startOfDay(d).getTime() });
+  return (
+    <div className="stack" style={{ padding: 16, gap: 10 }}>
+      <span className="muted small">
+        روزی که حقوق واریز شد را بزن؛ صفحه‌ی اصلی، آمار و ویجت از همین روز حساب می‌کنند. بدون آن، از اول ماه حساب می‌شود.
+      </span>
+      {value === null ? (
+        <button type="button" className="btn" onClick={() => set(new Date())}>
+          امروز حقوق آمد
+        </button>
+      ) : (
+        <>
+          <DatePicker value={new Date(value)} onChange={set} />
+          <div className="salary-row">
+            <button type="button" className="chip outline" onClick={() => set(new Date())}>
+              امروز
+            </button>
+            <button type="button" className="chip ghost" onClick={() => saveSettings({ salaryDate: null })}>
+              <X size={14} /> برگرد به اول ماه
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Backup() {
   const importBackup = useStore((s) => s.importBackup);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -187,9 +218,28 @@ export default function SettingsPage() {
         </Section>
       )}
 
+      <Section title="واریز حقوق">
+        <SalaryDate />
+      </Section>
+
       <Section title="بانک‌ها">
         <Banks />
       </Section>
+
+      {isNative && (
+        <Section title="اعلان پیامک">
+          <div className="list-row">
+            <label className="switch">
+              <input type="checkbox" checked={settings.tagNotify} onChange={(e) => saveSettings({ tagNotify: e.target.checked })} />
+              <span />
+            </label>
+            <span className="grow">
+              <div>تگ‌زدن از روی اعلان</div>
+              <div className="muted small">همان لحظه که پیامک بانک می‌آید، تگش را از بالای گوشی بزن.</div>
+            </span>
+          </div>
+        </Section>
+      )}
 
       <Section title="یادآور روزانه">
         <div className="list-row">

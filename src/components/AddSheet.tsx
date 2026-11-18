@@ -12,7 +12,7 @@ import TagChips from "./TagChips";
 import TypeToggle from "./TypeToggle";
 
 export default function AddSheet({ onClose }: { onClose: () => void }) {
-  const { banks, tags, transactions, addTransactions, showToast } = useStore();
+  const { banks, tags, transactions, transfers, addTransactions, showToast } = useStore();
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<TxType>("expense");
   const [bankId, setBankId] = useState(CASH_BANK_ID);
@@ -28,7 +28,7 @@ export default function AddSheet({ onClose }: { onClose: () => void }) {
   const rial = tomanInputToRial(amount);
   const timestamp = timestampFor(when, picked);
   const kindTags = tags.filter((t) => t.kind === (type === "income" ? "fund" : "expense"));
-  const fundLabels = useMemo(() => (type === "expense" ? allFunds(transactions).filter((f) => f.remaining > 0).map((f) => f.label) : []), [type, transactions]);
+  const fundLabels = useMemo(() => (type === "expense" ? allFunds(transactions, transfers).filter((f) => f.remaining > 0).map((f) => f.label) : []), [type, transactions, transfers]);
 
   function changeType(next: TxType) {
     setType(next);

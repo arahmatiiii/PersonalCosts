@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { splitTagKinds } from "../store/useStore";
 import type { Transaction } from "../types";
 import { fromJalali } from "./jalali";
-import { fundInRange, fundsInRange, unfundedExpenses } from "./stats";
+import { fundInRange, fundsInRange, homePeriod, monthBefore, paceVsLastMonth, unfundedExpenses } from "./stats";
+import type { FundTransfer } from "../types";
 
 let n = 0;
 const tx = (over: Partial<Transaction>): Transaction => ({
@@ -37,7 +38,7 @@ describe("pots over any range", () => {
   it("sums what came in and went out of each pot inside the range", () => {
     // 25 Shahrivar → 10 Mehr
     const r = fundsInRange(data, day(6, 25), day(7, 10) - 1);
-    expect(r).toEqual([{ label: "حقوق", income: 31_000, spent: 8_000 }]);
+    expect(r).toEqual([{ label: "حقوق", income: 31_000, spent: 8_000, movedIn: 0, movedOut: 0 }]);
     // the whole of Shahrivar + Mehr: two salaries, plus the «پروژه» pot that only had spending
     const all = fundsInRange(data, day(6, 1), day(8, 1) - 1);
     expect(all.find((f) => f.label === "حقوق")).toMatchObject({ income: 61_000, spent: 8_000 });
@@ -60,6 +61,34 @@ describe("pots over any range", () => {
 
   it("lists unfunded expenses in the range", () => {
     expect(unfundedExpenses(data, day(7, 1), day(8, 1) - 1).map((t) => t.amount)).toEqual([9_999]);
+  });
+});
+
+describe("transfers between pots", () => {
+  const move: FundTransfer = { id: "x", from: "حقوق", to: "پروژه", amount: 3_000, timestamp: at(7, 4), note: null };
+  it("count as in/out of each pot in the range and in the running balance", () => {
+    const r = fundsInRange(data, day(7, 1), day(8, 1) - 1, [move]);
+    expect(r.find((f) => f.label === "حقوق")).toMatchObject({ movedOut: 3_000, movedIn: 0 });
+    expect(r.find((f) => f.label === "پروژه")).toMatchObject({ movedIn: 3_000 });
+    const d = fundInRange(data, "حقوق", day(7, 1), day(8, 1) - 1, at(7, 6), [move]);
+    expect(d.transfers).toHaveLength(1);
+    expect(d.flow.map((f) => f.balance)).toEqual([31_000, 26_000, 23_000, 21_000]);
+  });
+});
+
+describe("salary period", () => {
+  it("starts Home at the salary day, or the month without one", () => {
+    const now = new Date(at(8, 20));
+    expect(homePeriod(day(8, 10), now)).toMatchObject({ from: day(8, 10), salary: true });
+    expect(homePeriod(null, now)).toMatchObject({ from: day(8, 1), salary: false });
+    // a salary day in the future is ignored
+    expect(homePeriod(day(8, 25), now).salary).toBe(false);
+  });
+
+  it("compares with the same stretch one month earlier", () => {
+    expect(monthBefore(day(8, 10))).toBe(day(7, 10));
+    const txs = [tx({ amount: 1_000, timestamp: at(7, 12) }), tx({ amount: 1_500, timestamp: at(8, 12) })];
+    expect(paceVsLastMonth(txs, new Date(at(8, 13)), day(8, 10))).toBeCloseTo(0.5);
   });
 });
 

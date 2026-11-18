@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SMS notification, expanded / heads-up: the question, the SMS, then up to 8 tag buttons (TagNotifier). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layoutDirection="rtl"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/notif_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification.Title" />
+
+    <TextView
+        android:id="@+id/notif_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification" />
+
+    <LinearLayout
+        android:id="@+id/notif_row1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/notif_chip0"
+            style="@style/NotifChip" />
+        <TextView
+            android:id="@+id/notif_chip1"
+            style="@style/NotifChip" />
+        <TextView
+            android:id="@+id/notif_chip2"
+            style="@style/NotifChip" />
+        <TextView
+            android:id="@+id/notif_chip3"
+            style="@style/NotifChip" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/notif_row2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/notif_chip4"
+            style="@style/NotifChip" />
+        <TextView
+            android:id="@+id/notif_chip5"
+            style="@style/NotifChip" />
+        <TextView
+            android:id="@+id/notif_chip6"
+            style="@style/NotifChip" />
+        <TextView
+            android:id="@+id/notif_chip7"
+            style="@style/NotifChip" />
+    </LinearLayout>
+</LinearLayout>

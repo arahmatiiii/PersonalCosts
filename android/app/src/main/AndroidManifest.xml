@@ -46,6 +46,8 @@
 
         <receiver android:name=".ReminderReceiver" android:exported="false" />
 
+        <receiver android:name=".TagActionReceiver" android:exported="false" />
+
         <receiver
             android:name=".SpendWidget"
             android:exported="false"

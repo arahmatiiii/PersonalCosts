@@ -1,6 +1,6 @@
-import { ArrowDownLeft, CalendarClock, CircleDollarSign, Gauge, TrendingDown, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, CalendarClock, CircleDollarSign, Gauge, TrendingDown, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
-import { faNum, rialToToman } from "../lib/format";
+import { faNum, formatToman, rialToToman } from "../lib/format";
 import { fundInRange, tagBreakdown, UNTAGGED, unfundedExpenses } from "../lib/stats";
 import { useStore } from "../store/useStore";
 import Amount from "./Amount";
@@ -8,6 +8,7 @@ import { Donut, FlowChart, SliceList } from "./Charts";
 import Sheet from "./Sheet";
 import TransactionRow from "./TransactionRow";
 import TransactionSheet from "./TransactionSheet";
+import TransferSheet from "./TransferSheet";
 
 interface Props {
   /** The «پول» to show; null shows the range's expenses that no pot paid for. */
@@ -20,12 +21,13 @@ interface Props {
 
 /** One «پول» over a date range: what came in, what was paid from it, where it went and every expense. */
 export default function FundSheet({ label, from, to, rangeLabel, onClose }: Props) {
-  const { transactions, tags, banks } = useStore();
+  const { transactions, transfers, tags, banks, deleteTransfer, addTransfer, showToast } = useStore();
+  const [moving, setMoving] = useState(false);
   const [selTags, setSelTags] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const bankById = useMemo(() => new Map(banks.map((b) => [b.id, b])), [banks]);
 
-  const detail = useMemo(() => (label ? fundInRange(transactions, label, from, to) : null), [transactions, label, from, to]);
+  const detail = useMemo(() => (label ? fundInRange(transactions, label, from, to, Date.now(), transfers) : null), [transactions, transfers, label, from, to]);
   const expenses = useMemo(() => detail?.expenses ?? unfundedExpenses(transactions, from, to), [detail, transactions, from, to]);
   const slices = useMemo(() => tagBreakdown(expenses, tags), [expenses, tags]);
   const shown = selTags.length ? expenses.filter((t) => selTags.includes(t.tag ?? UNTAGGED)) : expenses;
@@ -33,8 +35,9 @@ export default function FundSheet({ label, from, to, rangeLabel, onClose }: Prop
   const color = (label && tags.find((t) => t.label === label && t.kind === "fund")?.color) || "var(--primary)";
   const open = openId ? transactions.find((t) => t.id === openId) : undefined;
   const toggle = (l: string) => setSelTags((s) => (s.includes(l) ? s.filter((x) => x !== l) : [...s, l]));
-  const net = detail ? detail.income - detail.spent : 0;
-  const pct = detail && detail.income ? Math.min(100, (detail.spent / detail.income) * 100) : 0;
+  const net = detail ? detail.income + detail.movedIn - detail.spent - detail.movedOut : 0;
+  const inflow = detail ? detail.income + detail.movedIn : 0;
+  const pct = detail && inflow ? Math.min(100, ((detail.spent + detail.movedOut) / inflow) * 100) : 0;
 
   return (
     <Sheet
@@ -58,7 +61,7 @@ export default function FundSheet({ label, from, to, rangeLabel, onClose }: Prop
           <div className="fund-hero" style={{ "--c": color } as React.CSSProperties}>
             <span className="muted small">خالص این بازه (ورودی − خرج)</span>
             <Amount rial={net} type={net >= 0 ? undefined : "expense"} className={`fund-hero-left${net < 0 ? " expense" : ""}`} />
-            {detail.income > 0 && (
+            {inflow > 0 && (
               <>
                 <div className="bar-track thick">
                   <div className="bar-fill" style={{ width: `${pct}%`, background: color }} />
@@ -89,6 +92,15 @@ export default function FundSheet({ label, from, to, rangeLabel, onClose }: Prop
               <span className="muted small">{detail.daysLeft > 0 ? "روزهای باقی‌مانده" : "تعداد هزینه"}</span>
               <b className="num">{faNum(detail.daysLeft > 0 ? detail.daysLeft : detail.expenses.length)}</b>
             </div>
+            {(detail.movedIn > 0 || detail.movedOut > 0) && (
+              <div className="stat wide">
+                <ArrowLeftRight size={16} />
+                <span className="small">
+                  جابجایی: <span className="income num">+{faNum(rialToToman(detail.movedIn))}</span> /{" "}
+                  <span className="expense num">−{faNum(rialToToman(detail.movedOut))}</span> تومان
+                </span>
+              </div>
+            )}
             {detail.daysLeft > 0 && net > 0 && (
               <div className="stat wide ok">
                 <span className="small">
@@ -129,6 +141,45 @@ export default function FundSheet({ label, from, to, rangeLabel, onClose }: Prop
         </section>
       )}
 
+      {label && (
+        <button type="button" className="btn btn-block" onClick={() => setMoving(true)}>
+          <ArrowLeftRight size={18} /> جابجایی از این پول به پول دیگر
+        </button>
+      )}
+
+      {detail && detail.transfers.length > 0 && (
+        <section>
+          <div className="section-title">جابجایی‌ها</div>
+          <div className="card-soft tx-group">
+            {detail.transfers.map((x) => {
+              const incoming = x.to === label;
+              return (
+                <button
+                  key={x.id}
+                  type="button"
+                  className="tx"
+                  onClick={() => {
+                    if (!confirm(`جابجایی ${formatToman(x.amount)} از «${x.from}» به «${x.to}» حذف شود؟`)) return;
+                    deleteTransfer(x.id);
+                    const { id: _id, ...rest } = x;
+                    showToast("جابجایی حذف شد", () => addTransfer(rest));
+                  }}
+                >
+                  <div className="tx-icon" style={{ "--c": incoming ? "var(--income)" : "var(--muted)" } as React.CSSProperties}>
+                    <ArrowLeftRight size={18} />
+                  </div>
+                  <div className="grow">
+                    <div className="tx-title">{incoming ? `از ${x.from}` : `به ${x.to}`}</div>
+                    <div className="tx-sub">{[x.note, new Date(x.timestamp).toLocaleDateString("fa-IR", { day: "numeric", month: "short" })].filter(Boolean).join(" · ")}</div>
+                  </div>
+                  <Amount rial={x.amount} type={incoming ? "income" : "expense"} className="tx-amount" />
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {detail && detail.incomes.length > 0 && (
         <section>
           <div className="section-title">ورودی‌ها</div>
@@ -156,6 +207,7 @@ export default function FundSheet({ label, from, to, rangeLabel, onClose }: Prop
       </section>
 
       {open && <TransactionSheet key={open.id} tx={open} onClose={() => setOpenId(null)} />}
+      {moving && label && <TransferSheet from={label} onClose={() => setMoving(false)} />}
     </Sheet>
   );
 }

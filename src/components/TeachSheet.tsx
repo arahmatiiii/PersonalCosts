@@ -91,7 +91,7 @@ export default function TeachSheet({bankId, text: initial = "", unreadId, txId, 
         if (unreadId) {
             const u = s.unread.find((x) => x.id === unreadId);
             const tx = u && smsToTransaction(taught, u.text, u.ts);
-            if (tx) addTransactions([tx]);
+            if (tx) addTransactions([{ ...tx, captureId: unreadId }]);
             removeUnread([unreadId]);
         }
         if (txId) updateTransaction(txId, {
@@ -100,8 +100,9 @@ export default function TeachSheet({bankId, text: initial = "", unreadId, txId, 
             typeUncertain: false
         });
         const rest = useStore.getState().unread.filter((u) => u.bankId === bank.id);
-        const {added, readIds} = rereadUnread(rest, useStore.getState().banks, useStore.getState().transactions);
+        const {added, merges, readIds} = rereadUnread(rest, useStore.getState().banks, useStore.getState().transactions);
         addTransactions(added);
+        useStore.getState().applyMerges(merges);
         removeUnread(readIds);
         extra = readIds.length;
         haptic();

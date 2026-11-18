@@ -29,6 +29,8 @@ public final class CaptureStore {
     private static final String KEY_REMINDER_MINUTE = "reminder_minute";
     private static final String KEY_UNTAGGED = "untagged_count";
     private static final String KEY_WIDGET = "widget";
+    private static final String KEY_TAG_OPTIONS = "tag_options";
+    private static final String KEY_TAG_CHOICES = "tag_choices";
     private static final int MAX_QUEUE = 500;
 
     private CaptureStore() {}
@@ -81,21 +83,24 @@ public final class CaptureStore {
 
     // ---------------------------------------------------------------- queue
 
-    public static synchronized void enqueue(Context c, String sender, String text, long ts) {
+    /** Queues an SMS; returns its capture id (null if it couldn't be stored). */
+    public static synchronized String enqueue(Context c, String sender, String text, long ts) {
         JSONArray q = queue(c);
+        String id = UUID.randomUUID().toString();
         try {
             q.put(new JSONObject()
-                    .put("id", UUID.randomUUID().toString())
+                    .put("id", id)
                     .put("sender", sender)
                     .put("text", text)
                     .put("ts", ts));
         } catch (JSONException e) {
-            return;
+            return null;
         }
         while (q.length() > MAX_QUEUE) q.remove(0);
         prefs(c).edit().putString(KEY_QUEUE, q.toString()).commit();
         PersonalCostPlugin.notifyCapture();
         SpendWidget.refresh(c);
+        return id;
     }
 
     public static synchronized JSONArray queue(Context c) {
@@ -164,5 +169,55 @@ public final class CaptureStore {
         } catch (JSONException e) {
             return new JSONObject();
         }
+    }
+
+    // ---------------------------------------------------------------- tag-from-notification
+
+    /** {enabled, expense[], income[], payFrom[]} pushed by the JS side (src/native/bridge.ts tagOptions). */
+    public static void setTagOptions(Context c, JSONObject options) {
+        prefs(c).edit().putString(KEY_TAG_OPTIONS, options.toString()).commit();
+    }
+
+    public static JSONObject tagOptions(Context c) {
+        try {
+            return new JSONObject(prefs(c).getString(KEY_TAG_OPTIONS, "{}"));
+        } catch (JSONException e) {
+            return new JSONObject();
+        }
+    }
+
+    /** A tag picked on an SMS notification; JS applies it to that capture's transaction and acks. */
+    public static synchronized void addTagChoice(Context c, String captureId, String tag, String kind, String fund) {
+        JSONArray a = tagChoices(c);
+        try {
+            a.put(new JSONObject()
+                    .put("id", UUID.randomUUID().toString())
+                    .put("captureId", captureId)
+                    .put("tag", tag)
+                    .put("kind", kind)
+                    .put("fund", fund == null ? JSONObject.NULL : fund));
+        } catch (JSONException e) {
+            return;
+        }
+        while (a.length() > MAX_QUEUE) a.remove(0);
+        prefs(c).edit().putString(KEY_TAG_CHOICES, a.toString()).commit();
+    }
+
+    public static synchronized JSONArray tagChoices(Context c) {
+        try {
+            return new JSONArray(prefs(c).getString(KEY_TAG_CHOICES, "[]"));
+        } catch (JSONException e) {
+            return new JSONArray();
+        }
+    }
+
+    public static synchronized void ackTagChoices(Context c, Set<String> ids) {
+        JSONArray a = tagChoices(c);
+        JSONArray kept = new JSONArray();
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.optJSONObject(i);
+            if (o != null && !ids.contains(o.optString("id"))) kept.put(o);
+        }
+        prefs(c).edit().putString(KEY_TAG_CHOICES, kept.toString()).commit();
     }
 }

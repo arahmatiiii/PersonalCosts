@@ -10,11 +10,11 @@ import TagChips from "./TagChips";
 
 /** One untagged transaction at a time: «این چی بود؟», which «پول» paid (expenses), then one-tap tag. */
 export default function ReviewCard({ items }: { items: Transaction[] }) {
-  const { tags, banks, transactions, tagTransaction, updateTransaction, showToast } = useStore();
+  const { tags, banks, transactions, transfers, tagTransaction, updateTransaction, showToast } = useStore();
   const [skip, setSkip] = useState(0);
   const [fund, setFund] = useState<string | null>(null);
   const tx = items.length ? items[skip % items.length] : undefined;
-  const fundLabels = useMemo(() => (tx?.type === "expense" ? allFunds(transactions).filter((f) => f.remaining > 0).map((f) => f.label) : []), [tx, transactions]);
+  const fundLabels = useMemo(() => (tx?.type === "expense" ? allFunds(transactions, transfers).filter((f) => f.remaining > 0).map((f) => f.label) : []), [tx, transactions, transfers]);
   if (!tx) return null;
   const i = skip % items.length;
   const bank = tx.bankId === "cash" ? "نقدی" : (banks.find((b) => b.id === tx.bankId)?.name ?? "بانک");

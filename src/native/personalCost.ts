@@ -19,6 +19,26 @@ export interface WidgetData {
   untagged: number;
 }
 
+/** What the SMS notification offers as one-tap buttons (most used first). */
+export interface TagOptions {
+  enabled: boolean;
+  /** Expense tags. */
+  expense: string[];
+  /** «پول» tags, for incomes. */
+  income: string[];
+  /** «پول»s an expense can be paid from (second step after an expense tag). */
+  payFrom: string[];
+}
+
+/** A tag picked on the SMS notification, waiting to be applied to that SMS's transaction. */
+export interface TagChoice {
+  id: string;
+  captureId: string;
+  tag: string;
+  kind: "expense" | "income";
+  fund: string | null;
+}
+
 interface PersonalCostPlugin {
   /** SMS senders to capture; everything else is ignored natively. */
   setSenders(opts: { senders: string[] }): Promise<void>;
@@ -32,7 +52,12 @@ interface PersonalCostPlugin {
   setUntaggedCount(opts: { count: number }): Promise<void>;
   /** Pre-formatted texts for the home-screen widget. */
   setWidget(opts: WidgetData): Promise<void>;
-  addListener(event: "capture", fn: () => void): Promise<PluginListenerHandle>;
+  setTagOptions(opts: TagOptions): Promise<void>;
+  getTagChoices(): Promise<{ choices: TagChoice[] }>;
+  ackTagChoices(opts: { ids: string[] }): Promise<void>;
+  /** Remove the SMS notifications of these captures (tagged in the app, unreadable, duplicates…). */
+  cancelTagPrompts(opts: { captureIds: string[] }): Promise<void>;
+  addListener(event: "capture" | "tagChoice", fn: () => void): Promise<PluginListenerHandle>;
 }
 
 export const isNative = Capacitor.isNativePlatform();

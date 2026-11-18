@@ -44,6 +44,12 @@ describe("funds", () => {
 
   it("sums all tagged incomes and subtracts expenses paid from them", () => {
     const all = [salary, oldSalary, tx({ fund: "حقوق", amount: 30_000 }), tx({ fund: "حقوق", amount: 5, timestamp: new Date(2026, 7, 2).getTime() })];
-    expect(allFunds(all)).toEqual([{ label: "حقوق", total: 100_999, spent: 30_005, remaining: 70_994 }]);
+    expect(allFunds(all)).toEqual([{ label: "حقوق", total: 100_999, spent: 30_005, movedIn: 0, movedOut: 0, remaining: 70_994 }]);
+  });
+
+  it("moves money between pots with transfers", () => {
+    const f = allFunds([salary], [{ id: "t", from: "حقوق", to: "پس‌انداز", amount: 40_000, timestamp: 0, note: null }]);
+    expect(f.find((x) => x.label === "حقوق")?.remaining).toBe(60_000);
+    expect(f.find((x) => x.label === "پس‌انداز")?.remaining).toBe(40_000);
   });
 });

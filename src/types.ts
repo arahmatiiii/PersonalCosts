@@ -20,7 +20,22 @@ export interface Transaction {
   typeUncertain: boolean;
   /** Expenses only: which «پول» (tag of an income) paid for this. */
   fund?: string | null;
+  /** SMS only: id of the native capture it came from (links the «tag from notification» choice). */
+  captureId?: string;
+  /** A second SMS for the same expense (e.g. a «مسدودی» then the «کسر»), folded into this one. */
+  mergedText?: string;
+  mergedCaptureId?: string;
   createdAt: number;
+}
+
+/** Money moved from one «پول» to another (not an income or expense). Amount in Rial. */
+export interface FundTransfer {
+  id: string;
+  from: string;
+  to: string;
+  amount: number;
+  timestamp: number;
+  note: string | null;
 }
 
 /** A bank is just a name and the SMS sender number its messages come from. */
@@ -69,12 +84,18 @@ export interface UserSettings {
   reminderHour: number;
   reminderMinute: number;
   reminderEnabled: boolean;
+  /** Local midnight of the last salary payday; Home and Stats start from it. null: calendar month. */
+  salaryDate: number | null;
+  /** Android: a heads-up notification with tag buttons as soon as a bank SMS arrives. */
+  tagNotify: boolean;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
   reminderHour: 22,
   reminderMinute: 0,
   reminderEnabled: true,
+  salaryDate: null,
+  tagNotify: true,
 };
 
 export const CASH_BANK_ID = "cash";

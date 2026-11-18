@@ -54,6 +54,12 @@ public class PersonalCostPlugin extends Plugin {
         if (p != null) p.notifyListeners("capture", new JSObject());
     }
 
+    /** Called when a tag is picked on an SMS notification, so an open app applies it right away. */
+    static void notifyTagChoice() {
+        PersonalCostPlugin p = instance;
+        if (p != null) p.notifyListeners("tagChoice", new JSObject());
+    }
+
     private Context ctx() {
         return getContext();
     }
@@ -139,6 +145,41 @@ public class PersonalCostPlugin extends Plugin {
     @PluginMethod
     public void setUntaggedCount(PluginCall call) {
         CaptureStore.setUntaggedCount(ctx(), call.getInt("count", 0));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setTagOptions(PluginCall call) {
+        CaptureStore.setTagOptions(ctx(), call.getData());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getTagChoices(PluginCall call) {
+        JSONArray a = CaptureStore.tagChoices(ctx());
+        JSArray out = new JSArray();
+        for (int i = 0; i < a.length(); i++) {
+            JSONObject o = a.optJSONObject(i);
+            if (o != null) out.put(o);
+        }
+        JSObject ret = new JSObject();
+        ret.put("choices", out);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void ackTagChoices(PluginCall call) {
+        JSONArray ids = call.getArray("ids", new JSArray());
+        Set<String> set = new HashSet<>();
+        for (int i = 0; i < ids.length(); i++) set.add(ids.optString(i));
+        CaptureStore.ackTagChoices(ctx(), set);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void cancelTagPrompts(PluginCall call) {
+        JSONArray ids = call.getArray("captureIds", new JSArray());
+        for (int i = 0; i < ids.length(); i++) TagNotifier.cancel(ctx(), ids.optString(i));
         call.resolve();
     }
 

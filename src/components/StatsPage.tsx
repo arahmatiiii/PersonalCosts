@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { endOfDay, faNum, rialToToman, startOfDay } from "../lib/format";
 import { addMonths, MONTHS, monthLabel, monthOf, monthRange, sameMonth, toJalali, type JMonth } from "../lib/jalali";
 import { normalizeText } from "../lib/parser";
-import { dailyExpense, daysIn, tagBreakdown, UNTAGGED } from "../lib/stats";
+import { dailyExpense, daysIn, homePeriod, jDayLabel, tagBreakdown, UNTAGGED } from "../lib/stats";
 import { useStore } from "../store/useStore";
 import Amount from "./Amount";
 import { Donut, Heatmap, SliceList } from "./Charts";
@@ -29,9 +29,13 @@ const dayLabel = (d: Date) => {
 };
 
 export default function StatsPage() {
-  const [mode, setMode] = useState<"month" | "custom">("month");
+  const salaryDate = useStore((s) => s.settings.salaryDate);
+  const salary = homePeriod(salaryDate);
+  // With a salary day set, Stats opens on «since payday» instead of the calendar month.
+  const [mode, setMode] = useState<"salary" | "month" | "custom">(() => (salary.salary ? "salary" : "month"));
   const [month, setMonth] = useState(() => monthOf(new Date()));
   const [customFrom, setCustomFrom] = useState(() => {
+    if (salary.salary) return new Date(salary.from);
     const d = startOfDay(new Date());
     d.setDate(d.getDate() - 29);
     return d;
@@ -39,13 +43,16 @@ export default function StatsPage() {
   const [customTo, setCustomTo] = useState(() => startOfDay(new Date()));
 
   const period = useMemo((): Period => {
-    if (mode === "month") {
+    if (mode === "salary" && salary.salary) {
+      return { from: salary.from, to: salary.to, label: `از ${jDayLabel(salary.from)} (واریز حقوق)`, month: null };
+    }
+    if (mode === "month" || mode === "salary") {
       const [from, to] = monthRange(month);
       return { from, to, label: monthLabel(month), month };
     }
     const [a, b] = customFrom <= customTo ? [customFrom, customTo] : [customTo, customFrom];
     return { from: startOfDay(a).getTime(), to: endOfDay(b).getTime(), label: `${dayLabel(a)} تا ${dayLabel(b)}`, month: null };
-  }, [mode, month, customFrom, customTo]);
+  }, [mode, month, customFrom, customTo, salary.salary, salary.from, salary.to]);
   const days = Math.round((period.to + 1 - period.from) / 86_400_000);
 
   return (
@@ -53,6 +60,11 @@ export default function StatsPage() {
       <h1 className="page-title">آمار</h1>
 
       <div className="seg">
+        {salary.salary && (
+          <button type="button" className={mode === "salary" ? "on" : ""} onClick={() => setMode("salary")}>
+            از واریز حقوق
+          </button>
+        )}
         <button type="button" className={mode === "month" ? "on" : ""} onClick={() => setMode("month")}>
           ماه
         </button>
@@ -60,7 +72,12 @@ export default function StatsPage() {
           بازه‌ی دلخواه
         </button>
       </div>
-      {mode === "month" ? (
+      {mode === "salary" && salary.salary ? (
+        <div className="month-nav">
+          <span>{period.label}</span>
+          <span className="muted small">{faNum(daysIn(period.from, period.to))} روز گذشته</span>
+        </div>
+      ) : mode !== "custom" ? (
         <div className="month-nav">
           <button type="button" className="icon-btn" aria-label="ماه قبل" onClick={() => setMonth((m) => addMonths(m, -1))}>
             <ChevronRight size={20} />

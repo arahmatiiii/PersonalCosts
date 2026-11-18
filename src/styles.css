@@ -468,3 +468,16 @@ button.card:active { transform: scale(.985); }
 .onboard-icon.warn { background: var(--warn-soft); color: var(--warn); }
 .unread-item { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .unread-item .raw { background: var(--card); }
+
+/* editable amount in the transaction sheet */
+.amount-field.edit { display: block; margin-bottom: 4px; }
+.amount-field.edit .amount-input { font-size: 1.6rem; height: 58px; }
+.amount-field.edit.income .amount-input { color: var(--income); }
+.amount-field.edit .amount-sign { position: absolute; inset-inline-start: 22px; top: 50%; transform: translateY(-50%); font-size: 1.4rem; font-weight: 700; color: var(--muted); }
+.amount-field.edit svg { position: absolute; inset-inline-start: 44px; top: 50%; transform: translateY(-50%); }
+
+/* fund transfers */
+.transfer-arrow { display: flex; justify-content: center; color: var(--muted); margin: -4px 0; }
+.chip:disabled { opacity: .35; }
+.link-btn svg { vertical-align: -2px; }
+.salary-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

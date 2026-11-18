@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { Merge } from "../lib/ingest";
 import { newId } from "../lib/id";
-import { DEFAULT_SETTINGS, TAG_COLORS, type Bank, type SmsRule, type Tag, type TagKind, type Transaction, type UnreadSms, type UserSettings } from "../types";
+import { DEFAULT_SETTINGS, TAG_COLORS, type Bank, type FundTransfer, type SmsRule, type Tag, type TagKind, type Transaction, type UnreadSms, type UserSettings } from "../types";
 
 export type TabId = "home" | "history" | "stats" | "settings";
 
@@ -19,15 +20,23 @@ export interface AppState {
   settings: UserSettings;
   /** SMS from known banks that couldn't be read yet (newest first). */
   unread: UnreadSms[];
+  transfers: FundTransfer[];
   toast: Toast | null;
 
   setActiveTab: (t: TabId) => void;
 
   addTransactions: (txs: Transaction[]) => void;
+  /** Fold second SMS of already-recorded expenses into them (see lib/ingest.ts findTwin). */
+  applyMerges: (merges: Merge[]) => void;
   updateTransaction: (id: string, patch: Partial<Omit<Transaction, "id">>) => void;
   /** Tag a transaction; an expense can also say which «پول» paid for it. */
   tagTransaction: (id: string, tag: string, fund?: Pick<Transaction, "fund">) => void;
   deleteTransaction: (id: string) => void;
+  /** Undo a merge: the folded-in SMS becomes its own transaction again. */
+  splitMerged: (id: string) => void;
+
+  addTransfer: (t: Omit<FundTransfer, "id">) => void;
+  deleteTransfer: (id: string) => void;
 
   addBank: (name: string, sender: string) => void;
   deleteBank: (id: string) => void;
@@ -47,11 +56,12 @@ export interface AppState {
 }
 
 export interface BackupData {
-  version: 2 | 3;
+  version: 2 | 3 | 4;
   transactions: Transaction[];
   banks: Bank[];
   tags: Tag[];
   settings: UserSettings;
+  transfers?: FundTransfer[];
 }
 
 const defaultTags = (): Tag[] => [
@@ -114,12 +124,18 @@ export const useStore = create<AppState>()(
       tags: defaultTags(),
       settings: DEFAULT_SETTINGS,
       unread: [],
+      transfers: [],
       toast: null,
 
       setActiveTab: (activeTab) => set({ activeTab }),
 
       addTransactions: (txs) => {
         if (txs.length) set((s) => ({ transactions: [...txs, ...s.transactions] }));
+      },
+      applyMerges: (merges) => {
+        if (!merges.length) return;
+        const byId = new Map(merges.map((m) => [m.txId, m.patch]));
+        set((s) => ({ transactions: s.transactions.map((t) => (byId.has(t.id) ? { ...t, ...byId.get(t.id) } : t)) }));
       },
       updateTransaction: (id, patch) =>
         set((s) => ({ transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
@@ -128,6 +144,30 @@ export const useStore = create<AppState>()(
           transactions: s.transactions.map((t) => (t.id === id ? { ...t, tag, tagged: true, typeUncertain: false, ...fund } : t)),
         })),
       deleteTransaction: (id) => set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
+      splitMerged: (id) =>
+        set((s) => {
+          const t = s.transactions.find((x) => x.id === id);
+          if (!t?.mergedText) return {};
+          const twin: Transaction = {
+            ...t,
+            id: newId(),
+            rawText: t.mergedText,
+            captureId: t.mergedCaptureId,
+            mergedText: undefined,
+            mergedCaptureId: undefined,
+            tag: null,
+            fund: null,
+            note: null,
+            tagged: false,
+            timestamp: t.timestamp + 1,
+            createdAt: Date.now(),
+          };
+          const kept = { ...t, mergedText: undefined, mergedCaptureId: undefined };
+          return { transactions: [twin, ...s.transactions.map((x) => (x.id === id ? kept : x))] };
+        }),
+
+      addTransfer: (t) => set((s) => ({ transfers: [{ ...t, id: newId() }, ...s.transfers] })),
+      deleteTransfer: (id) => set((s) => ({ transfers: s.transfers.filter((t) => t.id !== id) })),
 
       addBank: (name, sender) => set((s) => ({ banks: [...s.banks, { id: newId(), name, sender }] })),
       deleteBank: (id) => set((s) => ({ banks: s.banks.filter((b) => b.id !== id), unread: s.unread.filter((u) => u.bankId !== id) })),
@@ -151,8 +191,9 @@ export const useStore = create<AppState>()(
         set({
           transactions: d.transactions,
           banks: d.banks,
-          tags: d.version === 3 ? d.tags : splitTagKinds(d.tags, d.transactions),
+          tags: d.version >= 3 ? d.tags : splitTagKinds(d.tags, d.transactions),
           settings: { ...DEFAULT_SETTINGS, ...d.settings },
+          transfers: d.transfers ?? [],
         }),
       showToast: (text, undo) => set({ toast: { id: Date.now(), text, undo } }),
       hideToast: () => set({ toast: null }),
@@ -172,11 +213,12 @@ export const useStore = create<AppState>()(
         tags: s.tags,
         settings: s.settings,
         unread: s.unread,
+        transfers: s.transfers,
       }),
     },
   ),
 );
 
 export function makeBackup(s: AppState): BackupData {
-  return { version: 3, transactions: s.transactions, banks: s.banks, tags: s.tags, settings: s.settings };
+  return { version: 4, transactions: s.transactions, banks: s.banks, tags: s.tags, settings: s.settings, transfers: s.transfers };
 }
